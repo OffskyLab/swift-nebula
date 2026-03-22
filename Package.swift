@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -12,11 +12,15 @@ let package = Package(
         .library(
             name: "Nebula",
             targets: ["Nebula"]),
+        .library(
+            name: "NebulaServiceLifecycle",
+            targets: ["NebulaServiceLifecycle"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.40.0"),
         .package(url: "https://github.com/apple/swift-nio-extras.git", from: "1.10.0"),
         .package(url: "https://github.com/hirotakan/MessagePacker.git", from: "0.4.0"),
+        .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.0.0"),
     ],
     targets: [
         .target(
@@ -25,6 +29,12 @@ let package = Package(
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOExtras", package: "swift-nio-extras"),
                 .product(name: "MessagePacker", package: "MessagePacker"),
+            ]),
+        .target(
+            name: "NebulaServiceLifecycle",
+            dependencies: [
+                "Nebula",
+                .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
             ]),
         .testTarget(
             name: "NebulaTests",
