@@ -23,9 +23,9 @@ public actor StandardGalaxy: Galaxy {
     }
 }
 
-// MARK: - NMTServerDelegate
+// MARK: - NMTServerTarget
 
-extension StandardGalaxy: NMTServerDelegate {
+extension StandardGalaxy: NMTServerTarget {
 
     public func handle(envelope: Matter) async throws -> Matter? {
         switch envelope.type {
@@ -98,7 +98,7 @@ extension StandardGalaxy {
             let amas = LoadBalanceAmas(name: namespace, namespace: namespace)
             let server = try await NMTServer.bind(
                 on: SocketAddress(ipAddress: "::1", port: 0),
-                delegate: amas
+                target: amas
             )
             let entry = ManagedAmasEntry(amas: amas, server: server)
             managedAmas[namespace] = entry
@@ -111,7 +111,7 @@ extension StandardGalaxy {
 
 private struct ManagedAmasEntry {
     let amas: LoadBalanceAmas
-    let server: NMTServer
+    let server: NMTServer<LoadBalanceAmas>
 
     func addStellar(namespace: String, endpoint: SocketAddress) async throws {
         try await amas.addStellar(namespace: namespace, endpoint: endpoint)

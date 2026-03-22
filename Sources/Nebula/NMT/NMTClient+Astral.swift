@@ -24,23 +24,7 @@ public struct UnregisterResult: Sendable {
 
 // MARK: - Galaxy Operations
 
-extension NMTClient {
-
-    /// Register a namespace → address mapping in Galaxy.
-    public func register(namespace: String, address: SocketAddress, identifier: UUID) async throws {
-        let body = RegisterBody(
-            namespace: namespace,
-            host: address.ipAddress ?? "::1",
-            port: address.port ?? 0,
-            identifier: identifier.uuidString
-        )
-        let envelope = try Matter.make(type: .register, body: body)
-        let reply = try await request(envelope: envelope)
-        let replyBody = try reply.decodeBody(RegisterReplyBody.self)
-        guard replyBody.status == "ok" else {
-            throw NebulaError.fail(message: "Register failed: \(replyBody.status)")
-        }
-    }
+extension NMTClient where Target == GalaxyTarget {
 
     /// Find the Stellar (and optional Amas) address for a namespace.
     public func find(namespace: String) async throws -> FindResult {
@@ -62,6 +46,36 @@ extension NMTClient {
         return FindResult(stellarAddress: stellarAddress, amasAddress: amasAddress)
     }
 
+    /// Register a namespace → address mapping in Galaxy.
+    public func register(namespace: String, address: SocketAddress, identifier: UUID) async throws {
+        let body = RegisterBody(
+            namespace: namespace,
+            host: address.ipAddress ?? "::1",
+            port: address.port ?? 0,
+            identifier: identifier.uuidString
+        )
+        let envelope = try Matter.make(type: .register, body: body)
+        let reply = try await request(envelope: envelope)
+        let replyBody = try reply.decodeBody(RegisterReplyBody.self)
+        guard replyBody.status == "ok" else {
+            throw NebulaError.fail(message: "Register failed: \(replyBody.status)")
+        }
+    }
+
+    /// Register a ServerAstral with Galaxy.
+    public func register(astral: some Astral, listeningOn address: SocketAddress) async throws {
+        try await register(
+            namespace: astral.namespace,
+            address: address,
+            identifier: astral.identifier
+        )
+    }
+}
+
+// MARK: - Amas Operations
+
+extension NMTClient where Target == AmasTarget {
+
     /// Notify an Amas that a Stellar is dead. Returns the next available Stellar address.
     public func unregister(namespace: String, host: String, port: Int) async throws -> UnregisterResult {
         let body = UnregisterBody(namespace: namespace, host: host, port: port)
@@ -78,25 +92,11 @@ extension NMTClient {
     }
 }
 
-// MARK: - Stellar / Amas Registration
+// MARK: - Any Astral Node Operations
 
-extension NMTClient {
+extension NMTClient where Target: AstralClientTarget {
 
-    /// Register a Stellar with this Amas (or register an Amas with a Galaxy).
-    public func register(astral: some Astral, listeningOn address: SocketAddress) async throws {
-        try await register(
-            namespace: astral.namespace,
-            address: address,
-            identifier: astral.identifier
-        )
-    }
-}
-
-// MARK: - Clone
-
-extension NMTClient {
-
-    /// Fetch the remote astral's identity info.
+    /// Fetch the remote node's identity info (works on any Astral node).
     public func clone() async throws -> CloneReplyBody {
         let envelope = try Matter.make(type: .clone, body: CloneBody())
         let reply = try await request(envelope: envelope)

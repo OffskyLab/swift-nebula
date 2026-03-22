@@ -39,9 +39,9 @@ open class ServiceStellar: @unchecked Sendable, Stellar {
     }
 }
 
-// MARK: - NMTServerDelegate
+// MARK: - NMTServerTarget
 
-extension ServiceStellar: NMTServerDelegate {
+extension ServiceStellar: NMTServerTarget {
 
     public func handle(envelope: Matter) async throws -> Matter? {
         switch envelope.type {

@@ -8,17 +8,14 @@
 import Foundation
 import NIO
 
-public protocol NMTServerDelegate: Sendable {
-    /// Handle an incoming envelope. Return a reply envelope, or nil for no reply.
-    func handle(envelope: Matter) async throws -> Matter?
-}
-
-public final class NMTServer: Sendable {
+public final class NMTServer<Target: NMTServerTarget>: Sendable {
     public let address: SocketAddress
+    public let target: Target
     private let channel: Channel
 
-    internal init(address: SocketAddress, channel: Channel) {
+    internal init(address: SocketAddress, target: Target, channel: Channel) {
         self.address = address
+        self.target = target
         self.channel = channel
     }
 }
@@ -29,11 +26,11 @@ extension NMTServer {
 
     public static func bind(
         on address: SocketAddress,
-        delegate: some NMTServerDelegate,
+        target: Target,
         eventLoopGroup: MultiThreadedEventLoopGroup? = nil
-    ) async throws -> NMTServer {
+    ) async throws -> NMTServer<Target> {
         let elg = eventLoopGroup ?? MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        let handler = NMTServerInboundHandler(delegate: delegate)
+        let handler = NMTServerInboundHandler(target: target)
 
         let channel = try await ServerBootstrap(group: elg)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
@@ -49,7 +46,7 @@ extension NMTServer {
             .get()
 
         let boundAddress = channel.localAddress ?? address
-        return NMTServer(address: boundAddress, channel: channel)
+        return NMTServer(address: boundAddress, target: target, channel: channel)
     }
 }
 
@@ -72,10 +69,10 @@ private final class NMTServerInboundHandler: ChannelInboundHandler, @unchecked S
     typealias InboundIn  = Matter
     typealias OutboundOut = Matter
 
-    private let delegate: any NMTServerDelegate
+    private let target: any NMTServerTarget
 
-    init(delegate: some NMTServerDelegate) {
-        self.delegate = delegate
+    init(target: some NMTServerTarget) {
+        self.target = target
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -84,7 +81,7 @@ private final class NMTServerInboundHandler: ChannelInboundHandler, @unchecked S
 
         Task {
             do {
-                if let reply = try await delegate.handle(envelope: envelope) {
+                if let reply = try await target.handle(envelope: envelope) {
                     channel.writeAndFlush(reply, promise: nil)
                 }
             } catch {

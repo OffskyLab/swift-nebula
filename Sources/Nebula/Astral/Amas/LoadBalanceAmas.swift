@@ -9,12 +9,12 @@ import Foundation
 import NIO
 
 private struct StellarConnection {
-    let client: NMTClient
+    let client: NMTClient<StellarTarget>
     let address: SocketAddress
 }
 
 private struct PendingStellar {
-    let task: Task<NMTClient, Error>
+    let task: Task<NMTClient<StellarTarget>, Error>
     let address: SocketAddress
 }
 
@@ -35,9 +35,9 @@ public actor LoadBalanceAmas: Amas {
     }
 }
 
-// MARK: - NMTServerDelegate
+// MARK: - NMTServerTarget
 
-extension LoadBalanceAmas: NMTServerDelegate {
+extension LoadBalanceAmas: NMTServerTarget {
 
     public func handle(envelope: Matter) async throws -> Matter? {
         switch envelope.type {
@@ -111,7 +111,7 @@ extension LoadBalanceAmas {
     /// Add a Stellar to the pool (called by Galaxy or via NMT register message).
     public func addStellar(namespace: String, endpoint: SocketAddress) async throws {
         let pending = PendingStellar(
-            task: Task { try await NMTClient.connect(to: endpoint) },
+            task: Task { try await NMTClient.connect(to: endpoint, as: .stellar) },
             address: endpoint
         )
         pendingConnections[namespace, default: []].append(pending)
