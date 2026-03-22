@@ -16,10 +16,10 @@ extension Planet {
 }
 
 private struct PlanetConnection {
-    var stellarClient: NMTClient
+    var stellarClient: NMTClient<StellarTarget>
     var stellarAddress: SocketAddress
     /// Amas client for failover — nil if this namespace has no Amas.
-    var amasClient: NMTClient?
+    var amasClient: NMTClient<AmasTarget>?
     var amasAddress: SocketAddress?
 }
 
@@ -30,11 +30,11 @@ public actor RoguePlanet: Planet {
     public let identifier: UUID
     public let name: String
 
-    private let galaxyClient: NMTClient
+    private let galaxyClient: NMTClient<GalaxyTarget>
     /// Per-namespace connection cache.
     private var connections: [String: PlanetConnection] = [:]
 
-    public init(name: String, galaxyClient: NMTClient, identifier: UUID = UUID()) {
+    public init(name: String, galaxyClient: NMTClient<GalaxyTarget>, identifier: UUID = UUID()) {
         self.identifier = identifier
         self.name = name
         self.galaxyClient = galaxyClient
@@ -63,6 +63,21 @@ extension RoguePlanet {
         } catch {
             return try await failover(namespace: namespace, deadConnection: conn, body: body)
         }
+    }
+
+    public func call(uri: NebulaURI) async throws -> Data? {
+        guard let service = uri.service else {
+            throw NebulaError.invalidURI("URI must include a service path component")
+        }
+        guard let method = uri.method else {
+            throw NebulaError.invalidURI("URI must include a method path component")
+        }
+        return try await call(
+            namespace: uri.namespace,
+            service: service,
+            method: method,
+            arguments: uri.arguments
+        )
     }
 
     public func call<T: Decodable>(
@@ -97,10 +112,10 @@ extension RoguePlanet {
             throw NebulaError.serviceNotFound(namespace: namespace)
         }
 
-        let stellarClient = try await NMTClient.connect(to: stellarAddress)
-        var amasClient: NMTClient?
+        let stellarClient = try await NMTClient.connect(to: stellarAddress, as: .stellar)
+        var amasClient: NMTClient<AmasTarget>?
         if let amasAddress = result.amasAddress {
-            amasClient = try await NMTClient.connect(to: amasAddress)
+            amasClient = try await NMTClient.connect(to: amasAddress, as: .amas)
         }
 
         let conn = PlanetConnection(
@@ -113,7 +128,7 @@ extension RoguePlanet {
         return conn
     }
 
-    private func perform(body: CallBody, via client: NMTClient) async throws -> Data? {
+    private func perform(body: CallBody, via client: NMTClient<StellarTarget>) async throws -> Data? {
         let envelope = try Matter.make(type: .call, body: body)
         let replyMatter = try await client.request(envelope: envelope)
         let reply = try replyMatter.decodeBody(CallReplyBody.self)
@@ -151,7 +166,7 @@ extension RoguePlanet {
             throw NebulaError.serviceNotFound(namespace: namespace)
         }
 
-        let newClient = try await NMTClient.connect(to: nextAddress)
+        let newClient = try await NMTClient.connect(to: nextAddress, as: .stellar)
         connections[namespace] = PlanetConnection(
             stellarClient: newClient,
             stellarAddress: nextAddress,
@@ -160,5 +175,47 @@ extension RoguePlanet {
         )
 
         return try await perform(body: body, via: newClient)
+    }
+}
+
+// MARK: - BoundPlanet
+
+/// A planet pre-configured with a specific service endpoint.
+/// Created via `Nebula.planet(connecting:)`.
+public struct BoundPlanet: Sendable {
+    private let planet: RoguePlanet
+    public let namespace: String
+    public let service: String
+    public let method: String
+
+    init(planet: RoguePlanet, namespace: String, service: String, method: String) {
+        self.planet    = planet
+        self.namespace = namespace
+        self.service   = service
+        self.method    = method
+    }
+
+    public func call(arguments: [String: ArgumentValue] = [:]) async throws -> Data? {
+        let args = try arguments.map { try Argument.wrap(key: $0.key, value: $0.value) }
+        return try await planet.call(
+            namespace: namespace,
+            service: service,
+            method: method,
+            arguments: args
+        )
+    }
+
+    public func call<T: Decodable & Sendable>(
+        arguments: [String: ArgumentValue] = [:],
+        as type: T.Type
+    ) async throws -> T {
+        let args = try arguments.map { try Argument.wrap(key: $0.key, value: $0.value) }
+        return try await planet.call(
+            namespace: namespace,
+            service: service,
+            method: method,
+            arguments: args,
+            as: type
+        )
     }
 }
