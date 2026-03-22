@@ -7,11 +7,9 @@
 
 import Foundation
 import Nebula
-import NIO
 import ServiceLifecycle
 
 struct DemoTask: ServiceLifecycle.Service {
-    let galaxyAddress: SocketAddress
 
     func run() async throws {
         // Give servers a moment to finish binding
@@ -19,13 +17,12 @@ struct DemoTask: ServiceLifecycle.Service {
 
         print("\n── Nebula Demo Call ──")
 
-        let planet = try await Nebula.planet(name: "demo-planet", connectingTo: galaxyAddress)
+        let planet = try await Nebula.planet(
+            connecting: "nmtp://[::1]:9000/production.ml.embedding/w2v/wordVector"
+        )
 
         let result = try await planet.call(
-            namespace: "production.ml.embedding",
-            service: "w2v",
-            method: "wordVector",
-            arguments: [try Argument.wrap(key: "words", value: ["慢跑", "反光", "排汗", "乾爽"])]
+            arguments: ["words": ["慢跑", "反光", "排汗", "乾爽"]]
         )
 
         print("Result:", result as Any)
