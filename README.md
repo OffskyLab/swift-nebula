@@ -42,7 +42,15 @@ Failover: Planet → notify Amas (dead Stellar) → get next Stellar → reconne
 
 ## The Protocol
 
-Nebula uses its own binary wire protocol — **NMT (Nebula Matter Transfer)** — over TCP with a compact 27-byte fixed header. The unit transmitted between nodes is called `Matter`, matching the M in NMT.
+Nebula uses its own binary wire protocol — **NMT (Nebula Matter Transfer)** — over TCP with a compact 27-byte fixed header.
+
+### Why "Matter"?
+
+In networking, the unit of transmission is conventionally called an *envelope* — a wrapper with a header describing the contents inside. Nebula uses the same structural concept: a fixed-length header carrying routing metadata, followed by a serialized body.
+
+The name `Matter` is intentional. In the Nebula metaphor, celestial bodies (Galaxy, Amas, Stellar, Planet) communicate by transferring *matter* through the nebula — just as stars exchange energy and particles across space. `Matter` is the M in **NMT (Nebula Matter Transfer)**: it is the thing being transmitted, not just a technical wrapper.
+
+Same structure as an envelope. Different name — because in this universe, what flows between nodes *is* matter.
 
 ```
 ┌─────────────┬─────────┬──────┬───────┬─────────────────────┬────────────────┬──────────────┐
