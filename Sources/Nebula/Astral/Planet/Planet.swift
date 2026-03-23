@@ -29,15 +29,19 @@ private struct PlanetConnection {
 public actor RoguePlanet: Planet {
     public let identifier: UUID
     public let name: String
+    public let namespace: String
+    public let service: String
 
     private let ingressClient: NMTClient<IngressTarget>
     /// Per-namespace connection cache.
     private var connections: [String: PlanetConnection] = [:]
 
-    public init(name: String, ingressClient: NMTClient<IngressTarget>, identifier: UUID = UUID()) {
+    public init(ingressClient: NMTClient<IngressTarget>, identifier: UUID = UUID(), namespace: String, service: String) {
         self.identifier = identifier
-        self.name = name
+        self.name = "\(namespace)/\(service)"
         self.ingressClient = ingressClient
+        self.namespace = namespace
+        self.service = service
     }
 }
 
@@ -46,8 +50,6 @@ public actor RoguePlanet: Planet {
 extension RoguePlanet {
 
     public func call(
-        namespace: String,
-        service: String,
         method: String,
         arguments: [Argument] = []
     ) async throws -> Data? {
@@ -65,31 +67,12 @@ extension RoguePlanet {
         }
     }
 
-    public func call(uri: NebulaURI) async throws -> Data? {
-        guard let service = uri.service else {
-            throw NebulaError.invalidURI("URI must include a service path component")
-        }
-        guard let method = uri.method else {
-            throw NebulaError.invalidURI("URI must include a method path component")
-        }
-        return try await call(
-            namespace: uri.namespace,
-            service: service,
-            method: method,
-            arguments: uri.arguments
-        )
-    }
-
     public func call<T: Decodable>(
-        namespace: String,
-        service: String,
         method: String,
         arguments: [Argument] = [],
         as type: T.Type
     ) async throws -> T {
         guard let data = try await call(
-            namespace: namespace,
-            service: service,
             method: method,
             arguments: arguments
         ) else {
@@ -175,47 +158,5 @@ extension RoguePlanet {
         )
 
         return try await perform(body: body, via: newClient)
-    }
-}
-
-// MARK: - BoundPlanet
-
-/// A planet pre-configured with a specific service endpoint.
-/// Created via `Nebula.planet(connecting:)`.
-public struct BoundPlanet: Sendable {
-    private let planet: RoguePlanet
-    public let namespace: String
-    public let service: String
-    public let method: String
-
-    init(planet: RoguePlanet, namespace: String, service: String, method: String) {
-        self.planet    = planet
-        self.namespace = namespace
-        self.service   = service
-        self.method    = method
-    }
-
-    public func call(arguments: [String: ArgumentValue] = [:]) async throws -> Data? {
-        let args = try arguments.map { try Argument.wrap(key: $0.key, value: $0.value) }
-        return try await planet.call(
-            namespace: namespace,
-            service: service,
-            method: method,
-            arguments: args
-        )
-    }
-
-    public func call<T: Decodable & Sendable>(
-        arguments: [String: ArgumentValue] = [:],
-        as type: T.Type
-    ) async throws -> T {
-        let args = try arguments.map { try Argument.wrap(key: $0.key, value: $0.value) }
-        return try await planet.call(
-            namespace: namespace,
-            service: service,
-            method: method,
-            arguments: args,
-            as: type
-        )
     }
 }

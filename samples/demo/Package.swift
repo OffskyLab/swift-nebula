@@ -20,7 +20,6 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MessagePacker", package: "MessagePacker"),
             ],
-            path: "Sources/NebulaDemo"
-        ),
+        )
     ]
 )

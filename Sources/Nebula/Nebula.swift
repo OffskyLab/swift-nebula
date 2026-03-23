@@ -29,22 +29,7 @@ extension Nebula {
 // MARK: - Client Helpers
 
 extension Nebula {
-
     /// Create a `RoguePlanet` connected to an Ingress at the given `SocketAddress`.
-    public static func planet(
-        name: String,
-        connectingTo ingressAddress: SocketAddress,
-        eventLoopGroup: MultiThreadedEventLoopGroup? = nil
-    ) async throws -> RoguePlanet {
-        let client = try await NMTClient.connect(
-            to: ingressAddress,
-            as: .ingress,
-            eventLoopGroup: eventLoopGroup
-        )
-        return RoguePlanet(name: name, ingressClient: client)
-    }
-
-    /// Create a `BoundPlanet` pre-configured with a specific service endpoint from a URI.
     ///
     /// URI format: `nmtp://host:port/namespace/service/method`
     /// - host:port = Ingress address
@@ -52,30 +37,22 @@ extension Nebula {
     public static func planet(
         connecting uriString: String,
         eventLoopGroup: MultiThreadedEventLoopGroup? = nil
-    ) async throws -> BoundPlanet {
+    ) async throws -> RoguePlanet {
         let uri = try NebulaURI(uriString)
 
         guard let service = uri.service else {
             throw NebulaError.invalidURI("URI must include service: \(uriString)")
         }
-        guard let method = uri.method else {
-            throw NebulaError.invalidURI("URI must include method: \(uriString)")
-        }
-
+        
         let ingressAddress = try SocketAddress.makeAddressResolvingHost(
             uri.ingressHost, port: uri.ingressPort
         )
+        print(ingressAddress)
         let client = try await NMTClient.connect(
             to: ingressAddress,
             as: .ingress,
             eventLoopGroup: eventLoopGroup
         )
-        let rogPlanet = RoguePlanet(name: "planet", ingressClient: client)
-        return BoundPlanet(
-            planet: rogPlanet,
-            namespace: uri.namespace,
-            service: service,
-            method: method
-        )
+        return .init(ingressClient: client, identifier: .init(), namespace: uri.namespace, service: service)
     }
 }
