@@ -32,18 +32,22 @@ extension NMTServer {
         let elg = eventLoopGroup ?? MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         let handler = NMTServerInboundHandler(target: target)
 
-        let channel = try await ServerBootstrap(group: elg)
-            .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
-            .childChannelOption(.socketOption(.so_reuseaddr), value: 1)
-            .childChannelInitializer { channel in
-                channel.pipeline.addHandlers([
-                    ByteToMessageHandler(MatterDecoder()),
-                    MessageToByteHandler(MatterEncoder()),
-                    handler,
-                ])
-            }
-            .bind(to: address)
-            .get()
+        let channel = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Channel, Error>) in
+            ServerBootstrap(group: elg)
+                .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
+                .childChannelOption(.socketOption(.so_reuseaddr), value: 1)
+                .childChannelInitializer { channel in
+                    channel.pipeline.addHandlers([
+                        ByteToMessageHandler(MatterDecoder()),
+                        MessageToByteHandler(MatterEncoder()),
+                        handler,
+                    ])
+                }
+                .bind(to: address)
+                .whenComplete { result in
+                    continuation.resume(with: result)
+                }
+        }
 
         let boundAddress = channel.localAddress ?? address
         return NMTServer(address: boundAddress, target: target, channel: channel)
