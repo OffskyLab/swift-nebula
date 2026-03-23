@@ -70,7 +70,7 @@ extension StandardIngress {
         let galaxyName = String(body.namespace.split(separator: ".").first ?? Substring(body.namespace))
 
         guard let galaxyAddress = galaxyRegistry[galaxyName] else {
-            throw NebulaError.discoveryFailed(name: galaxyName)
+            return try envelope.reply(body: FindReplyBody())
         }
 
         let client = try await galaxyClient(for: galaxyName, at: galaxyAddress)
@@ -98,7 +98,7 @@ extension StandardIngress {
         for name: String,
         at address: SocketAddress
     ) async throws -> NMTClient<GalaxyTarget> {
-        if let existing = galaxyClients[name] {
+        if let existing = galaxyClients[name], existing.targetAddress == address {
             return existing
         }
         let client = try await NMTClient.connect(to: address, as: .galaxy)
