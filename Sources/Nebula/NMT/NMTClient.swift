@@ -41,21 +41,17 @@ extension NMTClient {
         let pendingRequests = PendingRequests()
         let inboundHandler = NMTClientInboundHandler(pendingRequests: pendingRequests)
 
-        let channel = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Channel, Error>) in
-            ClientBootstrap(group: elg)
-                .channelOption(.socketOption(.so_reuseaddr), value: 1)
-                .channelInitializer { channel in
-                    channel.pipeline.addHandlers([
-                        ByteToMessageHandler(MatterDecoder()),
-                        MessageToByteHandler(MatterEncoder()),
-                        inboundHandler,
-                    ])
-                }
-                .connect(to: address)
-                .whenComplete { result in
-                    continuation.resume(with: result)
-                }
-        }
+        let channel = try await ClientBootstrap(group: elg)
+            .channelOption(.socketOption(.so_reuseaddr), value: 1)
+            .channelInitializer { channel in
+                channel.pipeline.addHandlers([
+                    ByteToMessageHandler(MatterDecoder()),
+                    MessageToByteHandler(MatterEncoder()),
+                    inboundHandler,
+                ])
+            }
+            .connect(to: address)
+            .get()
 
         return NMTClient(
             targetAddress: address,

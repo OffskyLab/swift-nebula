@@ -28,11 +28,11 @@ try await ingressClient.registerGalaxy(
 // MARK: - Stellar
 
 let stellar = makeStellar()  // defined in StellarSetup.swift
-let stellarServer = try await Nebula.server(with: stellar)
-    .bind(on: SocketAddress(ipAddress: "::1", port: 0))
+let stellarAddress = try SocketAddress(ipAddress: "::1", port: 7000)
+let stellarServer = try await Nebula.server(with: stellar).bind(on: stellarAddress)
 
 // Register with Galaxy — LoadBalanceAmas is created automatically
-try await galaxy.register(namespace: stellar.namespace, stellarEndpoint: stellarServer.address)
+try await galaxy.register(namespace: stellar.namespace, stellarEndpoint: stellarAddress)
 
 // MARK: - Run all services
 

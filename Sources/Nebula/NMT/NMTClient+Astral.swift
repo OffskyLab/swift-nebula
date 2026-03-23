@@ -35,12 +35,12 @@ extension NMTClient where Target == IngressTarget {
 
         let stellarAddress: SocketAddress? = try {
             guard let host = replyBody.stellarHost, let port = replyBody.stellarPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         let amasAddress: SocketAddress? = try {
             guard let host = replyBody.amasHost, let port = replyBody.amasPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return FindResult(stellarAddress: stellarAddress, amasAddress: amasAddress)
@@ -76,12 +76,12 @@ extension NMTClient where Target == GalaxyTarget {
 
         let stellarAddress: SocketAddress? = try {
             guard let host = replyBody.stellarHost, let port = replyBody.stellarPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         let amasAddress: SocketAddress? = try {
             guard let host = replyBody.amasHost, let port = replyBody.amasPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return FindResult(stellarAddress: stellarAddress, amasAddress: amasAddress)
@@ -126,7 +126,7 @@ extension NMTClient where Target == AmasTarget {
 
         let nextAddress: SocketAddress? = try {
             guard let host = replyBody.nextHost, let port = replyBody.nextPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return UnregisterResult(nextAddress: nextAddress)

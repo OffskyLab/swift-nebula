@@ -62,7 +62,9 @@ extension Nebula {
             throw NebulaError.invalidURI("URI must include method: \(uriString)")
         }
 
-        let ingressAddress = try SocketAddress(ipAddress: uri.ingressHost, port: uri.ingressPort)
+        let ingressAddress = try SocketAddress.makeAddressResolvingHost(
+            uri.ingressHost, port: uri.ingressPort
+        )
         let client = try await NMTClient.connect(
             to: ingressAddress,
             as: .ingress,
