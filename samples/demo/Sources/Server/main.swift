@@ -42,8 +42,7 @@ let serviceGroup = ServiceGroup(
     services: [
         ingressServer,
         galaxyServer,
-        stellarServer,
-        DemoTask(),
+        stellarServer
     ],
     gracefulShutdownSignals: [.sigterm, .sigint],
     logger: logger

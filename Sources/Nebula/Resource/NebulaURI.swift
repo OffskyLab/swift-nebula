@@ -7,20 +7,16 @@
 
 import Foundation
 
-/// Represents an `nmtp://` URI used to address a service endpoint via Ingress.
+/// Represents an `nmtp://` connection URI used to locate a namespace via Ingress.
 ///
 /// Namespace format follows forward order (discovery path): `{galaxy}.{amas}.{stellar}`
 /// — broadest first, most specific last. Reading left to right matches the routing path.
 ///
-/// Single format — host:port is always the Ingress address:
-///
 /// ```
-/// nmtp://localhost:22400/production.ml.embedding/w2v/wordVector?key=value
-///        └─────────────┘ └──────────────────────┘ └──┘ └────────┘
-///        Ingress address  namespace (galaxy.amas.stellar) svc  method
+/// nmtp://localhost:22400/production.ml.embedding
+///        └─────────────┘ └──────────────────────┘
+///        Ingress address  namespace (galaxy.amas.stellar)
 /// ```
-///
-/// Query string arguments support JSON strings, numbers, booleans, and arrays.
 public struct NebulaURI: Sendable {
     public static let scheme = "nmtp"
 
@@ -34,12 +30,6 @@ public struct NebulaURI: Sendable {
 
     /// The service namespace in forward order (e.g. `production.ml.embedding`).
     public let namespace: String
-    /// Service name (e.g. `w2v`).
-    public let service: String?
-    /// Method name (e.g. `wordVector`).
-    public let method: String?
-    /// Arguments from query string.
-    public let arguments: [Argument]
 
     /// Galaxy name — first dot-separated segment of namespace.
     /// e.g. `"production"` from `"production.ml.embedding"`.
@@ -79,24 +69,5 @@ public struct NebulaURI: Sendable {
         }
 
         namespace = pathParts[0]
-        service   = pathParts.count > 1 ? pathParts[1] : nil
-        method    = pathParts.count > 2 ? pathParts[2] : nil
-
-        arguments = try (components.queryItems ?? []).map { item in
-            try NebulaURI.parseArgument(key: item.name, rawValue: item.value ?? "")
-        }
-    }
-}
-
-// MARK: - Argument Parsing
-
-extension NebulaURI {
-
-    private static func parseArgument(key: String, rawValue: String) throws -> Argument {
-        if let data = rawValue.data(using: .utf8),
-           let jsonObject = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) {
-            return try Argument.wrap(key: key, value: ArgumentValue(jsonObject))
-        }
-        return try Argument.wrap(key: key, value: rawValue)
     }
 }
