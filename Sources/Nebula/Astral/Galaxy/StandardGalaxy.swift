@@ -52,7 +52,7 @@ extension StandardGalaxy {
     /// Handle Stellar registration: delegate to Amas (auto-created per namespace).
     private func handleRegister(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(RegisterBody.self)
-        let address = try SocketAddress(ipAddress: body.host, port: body.port)
+        let address = try SocketAddress.makeAddressResolvingHost(body.host, port: body.port)
         let amas = try amasFor(namespace: body.namespace)
         try await amas.addStellar(namespace: body.namespace, endpoint: address)
         return try envelope.reply(body: RegisterReplyBody(status: "ok"))

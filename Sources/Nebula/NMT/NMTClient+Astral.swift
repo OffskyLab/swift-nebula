@@ -33,7 +33,7 @@ extension NMTClient where Target == IngressTarget {
 
         let stellarAddress: SocketAddress? = try {
             guard let host = replyBody.stellarHost, let port = replyBody.stellarPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return FindResult(stellarAddress: stellarAddress)
@@ -64,7 +64,7 @@ extension NMTClient where Target == IngressTarget {
 
         let nextAddress: SocketAddress? = try {
             guard let host = replyBody.nextHost, let port = replyBody.nextPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return UnregisterResult(nextAddress: nextAddress)
@@ -84,7 +84,7 @@ extension NMTClient where Target == GalaxyTarget {
 
         let stellarAddress: SocketAddress? = try {
             guard let host = replyBody.stellarHost, let port = replyBody.stellarPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return FindResult(stellarAddress: stellarAddress)
@@ -124,7 +124,7 @@ extension NMTClient where Target == GalaxyTarget {
 
         let nextAddress: SocketAddress? = try {
             guard let host = replyBody.nextHost, let port = replyBody.nextPort else { return nil }
-            return try SocketAddress(ipAddress: host, port: port)
+            return try SocketAddress.makeAddressResolvingHost(host, port: port)
         }()
 
         return UnregisterResult(nextAddress: nextAddress)
