@@ -59,7 +59,7 @@ extension StandardIngress {
     /// Handle Galaxy registration: Galaxy sends its name and address.
     private func handleRegister(envelope: Matter) throws -> Matter {
         let body = try envelope.decodeBody(RegisterBody.self)
-        let address = try SocketAddress(ipAddress: body.host, port: body.port)
+        let address = try SocketAddress.makeAddressResolvingHost(body.host, port: body.port)
         galaxyRegistry[body.namespace] = address
         return try envelope.reply(body: RegisterReplyBody(status: "ok"))
     }

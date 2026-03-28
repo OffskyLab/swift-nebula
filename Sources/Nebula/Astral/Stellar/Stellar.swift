@@ -20,23 +20,30 @@ public typealias ServiceVersion = String
 
 /// A Stellar that hosts named Services.
 ///
-/// Middlewares can be added via ``use(_:)`` before the server starts.
-/// They are executed in registration order (first registered = outermost),
-/// wrapping the core dispatch handler.
+/// Middlewares are stacked via ``use(_:)`` before the server starts.
+/// Each call to `use()` wraps the current chain from the outside, so the
+/// **last-registered middleware runs outermost** (first to receive each envelope).
 ///
 /// ```swift
 /// let stellar = try ServiceStellar(name: "account", namespace: "production.mendesky")
-///     .use(LoggingMiddleware())
-///     .use(LDAPAuthMiddleware(config: ldapConfig))
+///     .use(LoggingMiddleware())      // inner — runs second
+///     .use(LDAPAuthMiddleware(...))  // outer — runs first
 ///     .add(service: accountService)
 /// ```
+///
+/// The composed chain is stored directly as a closure; no rebuild happens on
+/// the hot path.
 open class ServiceStellar: @unchecked Sendable, Stellar {
     public let identifier: UUID
     public let name: String
     public let namespace: String
 
     public internal(set) var availableServices: [ServiceVersion: Service] = [:]
-    private var middlewares: [any NMTMiddleware] = []
+
+    /// The composed middleware chain. `nil` means no middleware has been
+    /// registered; `handle` falls through directly to `coreDispatch`.
+    /// Each `use(_:)` call wraps this closure with one new outer layer.
+    private var chain: NMTMiddlewareNext?
 
     public init(name: String, namespace: String, identifier: UUID = UUID()) throws {
         try Self.validateName(name)
@@ -45,10 +52,14 @@ open class ServiceStellar: @unchecked Sendable, Stellar {
         self.namespace = namespace
     }
 
-    /// Appends a middleware to the chain. Returns `self` for fluent chaining.
+    /// Wraps the current chain with `middleware` as a new outer layer.
+    /// Must be called during setup, before the server starts serving.
     @discardableResult
     public func use(_ middleware: any NMTMiddleware) -> Self {
-        middlewares.append(middleware)
+        let inner: NMTMiddlewareNext = chain ?? { [unowned self] envelope in
+            try await self.coreDispatch(envelope: envelope)
+        }
+        chain = { envelope in try await middleware.handle(envelope, next: inner) }
         return self
     }
 
@@ -64,25 +75,10 @@ open class ServiceStellar: @unchecked Sendable, Stellar {
 extension ServiceStellar: NMTServerTarget {
 
     public func handle(envelope: Matter) async throws -> Matter? {
-        let chain = buildChain(from: middlewares)
-        return try await chain(envelope)
-    }
-}
-
-// MARK: - Middleware chain
-
-extension ServiceStellar {
-
-    /// Builds the middleware chain by folding the array around the core dispatch handler.
-    /// Snapshot `middlewares` once so concurrent `use()` calls during setup can't
-    /// produce a torn read on the hot path.
-    private func buildChain(from middlewares: [any NMTMiddleware]) -> NMTMiddlewareNext {
-        let core: NMTMiddlewareNext = { [self] envelope in
-            try await self.coreDispatch(envelope: envelope)
+        if let chain {
+            return try await chain(envelope)
         }
-        return middlewares.reversed().reduce(core) { next, middleware in
-            { envelope in try await middleware.handle(envelope, next: next) }
-        }
+        return try await coreDispatch(envelope: envelope)
     }
 }
 

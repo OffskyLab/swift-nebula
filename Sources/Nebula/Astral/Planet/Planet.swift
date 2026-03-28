@@ -21,8 +21,8 @@ private struct PlanetConnection {
 }
 
 /// A Planet that connects directly to Stellars and uses Ingress for discovery and failover.
-/// - Normal path: Planet → Galaxy (find) → connect directly to Stellar
-/// - Failover path: Stellar unreachable → notify Galaxy (unregister) → get next Stellar → reconnect
+/// - Normal path: Planet → Ingress (find) → connect directly to Stellar
+/// - Failover path: Stellar unreachable → notify Ingress (unregister) → get next Stellar → reconnect
 public actor RoguePlanet: Planet {
     public let identifier: UUID
     public let name: String
@@ -81,7 +81,7 @@ extension RoguePlanet {
 
 extension RoguePlanet {
 
-    /// Returns the cached connection for the namespace, or establishes one via Galaxy.
+    /// Returns the cached connection for the namespace, or establishes one via Ingress.
     private func connection(for namespace: String) async throws -> PlanetConnection {
         if let conn = connections[namespace] { return conn }
 
