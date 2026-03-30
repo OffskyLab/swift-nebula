@@ -120,6 +120,64 @@ public struct EncodedArgument: Codable, Sendable {
     }
 }
 
+// MARK: - Enqueue / ACK
+
+public struct EnqueueBody: Codable, Sendable {
+    public var namespace: String
+    public var method: String
+    public var arguments: [EncodedArgument]
+
+    public init(namespace: String, method: String, arguments: [EncodedArgument]) {
+        self.namespace = namespace
+        self.method = method
+        self.arguments = arguments
+    }
+}
+
+public struct AckBody: Codable, Sendable {
+    public var messageID: String
+
+    public init(messageID: String) {
+        self.messageID = messageID
+    }
+}
+
+// MARK: - Subscribe / Event
+
+public struct SubscribeBody: Codable, Sendable {
+    public var topic: String
+    public var subscription: String
+
+    public init(topic: String, subscription: String) {
+        self.topic = topic
+        self.subscription = subscription
+    }
+}
+
+public struct UnsubscribeBody: Codable, Sendable {
+    public var topic: String
+    public var subscription: String
+
+    public init(topic: String, subscription: String) {
+        self.topic = topic
+        self.subscription = subscription
+    }
+}
+
+public struct EventBody: Codable, Sendable {
+    public var topic: String
+    public var method: String
+    public var arguments: [EncodedArgument]
+
+    public init(topic: String, method: String, arguments: [EncodedArgument]) {
+        self.topic = topic
+        self.method = method
+        self.arguments = arguments
+    }
+}
+
+// MARK: - Call Reply
+
 public struct CallReplyBody: Codable, Sendable {
     public var result: Data?
     public var error: String?

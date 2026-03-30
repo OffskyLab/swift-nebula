@@ -16,4 +16,9 @@ public enum MessageType: UInt8, Sendable {
     case activate   = 0x06
     case heartbeat  = 0x07
     case unregister = 0x08
+    case enqueue    = 0x09
+    case ack        = 0x0a
+    case subscribe  = 0x0b
+    case unsubscribe = 0x0c
+    case event      = 0x0d
 }
