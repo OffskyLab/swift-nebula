@@ -40,6 +40,10 @@ private func loopbackPort0() throws -> SocketAddress {
     try .makeAddressResolvingHost("127.0.0.1", port: 0)
 }
 
+private func dummyChannel() -> Channel {
+    EmbeddedChannel()
+}
+
 // MARK: - Suite 1: Middleware Chain (unit — no network)
 
 @Suite("NMTMiddleware Chain")
@@ -61,7 +65,7 @@ struct NMTMiddlewareChainTests {
     /// With no middleware, a call envelope is dispatched directly to coreDispatch.
     @Test func noMiddleware_callReachesCore() async throws {
         let stellar = try echoStellar()
-        let reply = try await stellar.handle(envelope: try callEnvelope())
+        let reply = try await stellar.handle(envelope: try callEnvelope(), channel: dummyChannel())
         let body = try #require(reply).decodeBody(CallReplyBody.self)
         #expect(body.error == nil)
         #expect(body.result != nil)
@@ -75,7 +79,7 @@ struct NMTMiddlewareChainTests {
         stellar
             .use(TrackingMiddleware(label: "A", log: log))
             .use(TrackingMiddleware(label: "B", log: log))
-        _ = try await stellar.handle(envelope: try callEnvelope())
+        _ = try await stellar.handle(envelope: try callEnvelope(), channel: dummyChannel())
         let entries = await log.entries
         #expect(entries == ["B:in", "A:in", "A:out", "B:out"])
     }
@@ -87,7 +91,7 @@ struct NMTMiddlewareChainTests {
         stellar
             .use(TrackingMiddleware(label: "A", log: log))
             .use(ShortCircuitMiddleware())
-        _ = try await stellar.handle(envelope: try callEnvelope())
+        _ = try await stellar.handle(envelope: try callEnvelope(), channel: dummyChannel())
         #expect(await log.entries.isEmpty)
     }
 
@@ -97,7 +101,7 @@ struct NMTMiddlewareChainTests {
         let stellar = try echoStellar()
         stellar.use(TrackingMiddleware(label: "A", log: log))
         let cloneEnvelope = try Matter.make(type: .clone, body: CloneBody())
-        let reply = try await stellar.handle(envelope: cloneEnvelope)
+        let reply = try await stellar.handle(envelope: cloneEnvelope, channel: dummyChannel())
         let body = try #require(reply).decodeBody(CloneReplyBody.self)
         #expect(body.name == "echo")
         #expect(await log.entries == ["A:in", "A:out"])
