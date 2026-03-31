@@ -31,6 +31,7 @@ let ingressClient = try await NMTClient.connect(
     to: try SocketAddress.makeAddressResolvingHost(ingressHost, port: ingressPort),
     as: .ingress
 )
+
 try await ingressClient.registerGalaxy(
     name: galaxyName,
     address: advertiseAddress,

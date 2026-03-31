@@ -17,7 +17,8 @@ let ingressPort = Int(ProcessInfo.processInfo.environment["INGRESS_PORT"] ?? "62
 let ingressAddress = try SocketAddress.makeAddressResolvingHost(ingressHost, port: ingressPort)
 let ingressClient = try await NMTClient.connect(to: ingressAddress, as: .ingress)
 
-print("[Subscriber] Subscribing to production.orders (group: fulfillment) ...")
+print("[Subscriber] Connecting to Ingress ...")
+print("[Subscriber] Finding Galaxy for production.orders ...")
 
 let subscriber = try await Subscriber(
     ingressClient: ingressClient,
@@ -28,6 +29,7 @@ let subscriber = try await Subscriber(
 print("[Subscriber] Subscribed. Waiting for events ...")
 
 for await event in await subscriber.events {
-    let args = event.arguments.map { "\($0.key)=\(String(data: $0.value, encoding: .utf8) ?? "?")" }
+    let dict = event.arguments.toArguments().toDictionary()
+    let args = dict.map { "\($0.key)=\($0.value.map { "\($0)" } ?? "nil")" }.sorted()
     print("[Subscriber] \(event.service).\(event.method)(\(args.joined(separator: ", ")))")
 }

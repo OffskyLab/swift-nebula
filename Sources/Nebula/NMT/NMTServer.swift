@@ -40,8 +40,6 @@ extension NMTServer {
     ) async throws -> NMTServer<Target> {
         let owned = eventLoopGroup == nil ? MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount) : nil
         let elg = eventLoopGroup ?? owned!
-        let handler = NMTServerInboundHandler(target: target)
-
         let channel = try await ServerBootstrap(group: elg)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.socketOption(.so_reuseaddr), value: 1)
@@ -49,7 +47,7 @@ extension NMTServer {
                 channel.pipeline.addHandlers([
                     ByteToMessageHandler(MatterDecoder()),
                     MessageToByteHandler(MatterEncoder()),
-                    handler,
+                    NMTServerInboundHandler(target: target),
                 ])
             }
             .bind(to: address)
