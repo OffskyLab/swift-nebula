@@ -45,10 +45,10 @@ private func dummyChannel() -> Channel {
 @Suite("NMTMiddleware Chain")
 struct NMTMiddlewareChainTests {
 
-    private func echoStellar() throws -> ServiceStellar {
+    private func echoStellar() async throws -> ServiceStellar {
         let stellar = try ServiceStellar(name: "echo", namespace: "test.echo")
         let svc = Service(name: "echo")
-        svc.add(method: "ping") { _ in Data([1]) }
+        await svc.add(method: "ping") { _ in Data([1]) }
         stellar.add(service: svc)
         return stellar
     }
@@ -60,7 +60,7 @@ struct NMTMiddlewareChainTests {
 
     /// With no middleware, a call matter is dispatched directly to coreDispatch.
     @Test func noMiddleware_callReachesCore() async throws {
-        let stellar = try echoStellar()
+        let stellar = try await echoStellar()
         let reply = try await stellar.handle(matter: try callMatter(), channel: dummyChannel())
         let body = try #require(reply).decodeBody(CallReplyBody.self)
         #expect(body.error == nil)
@@ -71,7 +71,7 @@ struct NMTMiddlewareChainTests {
     /// Expected log: B:in → A:in → (core) → A:out → B:out
     @Test func lastRegistered_runsOutermost() async throws {
         let log = CallLog()
-        let stellar = try echoStellar()
+        let stellar = try await echoStellar()
         stellar
             .use(TrackingMiddleware(label: "A", log: log))
             .use(TrackingMiddleware(label: "B", log: log))
@@ -83,7 +83,7 @@ struct NMTMiddlewareChainTests {
     /// A middleware that does not call `next` prevents all inner layers from running.
     @Test func shortCircuit_preventsInnerMiddleware() async throws {
         let log = CallLog()
-        let stellar = try echoStellar()
+        let stellar = try await echoStellar()
         stellar
             .use(TrackingMiddleware(label: "A", log: log))
             .use(ShortCircuitMiddleware())
@@ -94,7 +94,7 @@ struct NMTMiddlewareChainTests {
     /// Non-call matters (clone) pass through the middleware chain and are handled by coreDispatch.
     @Test func nonCallMatter_cloneHandledByCore() async throws {
         let log = CallLog()
-        let stellar = try echoStellar()
+        let stellar = try await echoStellar()
         stellar.use(TrackingMiddleware(label: "A", log: log))
         let cloneMatter = try Matter.make(type: .clone, body: CloneBody())
         let reply = try await stellar.handle(matter: cloneMatter, channel: dummyChannel())
@@ -112,7 +112,7 @@ struct IngressRoutingTests {
     private func bindEchoStellar(namespace: String) async throws -> NMTServer {
         let stellar = try ServiceStellar(name: "echo", namespace: namespace)
         let svc = Service(name: "echo")
-        svc.add(method: "ping") { _ in Data([1]) }
+        await svc.add(method: "ping") { _ in Data([1]) }
         stellar.add(service: svc)
         return try await NMTServer.bind(on: try loopbackPort0(), handler: stellar)
     }
@@ -179,5 +179,34 @@ struct IngressRoutingTests {
 
         let nextAddr = try #require(next.nextAddress)
         #expect(nextAddr != firstAddr)
+    }
+}
+
+// MARK: - Suite 3: Service actor
+
+@Suite("Service Actor")
+struct ServiceActorTests {
+
+    /// Concurrent add + perform must not crash and must return correct results.
+    @Test func concurrentAddAndPerform() async throws {
+        let svc = Service(name: "math")
+        await svc.add(method: "double") { args in
+            guard let first = args.first else { return nil }
+            let n = try first.unwrap(as: Int.self)
+            return try JSONEncoder().encode(n * 2)
+        }
+
+        try await withThrowingTaskGroup(of: Data?.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    let arg = try Argument.wrap(key: "x", value: 1)
+                    return try await svc.perform(method: "double", with: [arg])
+                }
+            }
+            for try await result in group {
+                let value = try JSONDecoder().decode(Int.self, from: result!)
+                #expect(value == 2)
+            }
+        }
     }
 }
