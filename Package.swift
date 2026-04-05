@@ -14,7 +14,7 @@ let package = Package(
             targets: ["Nebula"]),
     ],
     dependencies: [
-        .package(path: "../swift-nmtp"),
+        .package(url: "https://github.com/OffskyLab/swift-nmtp.git", from: "0.0.1"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.40.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
     ],
