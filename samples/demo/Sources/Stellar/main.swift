@@ -24,12 +24,12 @@ let galaxyPort = Int(ProcessInfo.processInfo.environment["GALAXY_PORT"] ?? "6220
 let stellar = try ServiceStellar(name: stellarName, namespace: namespace)
 
 let w2v = Service(name: "w2v")
-w2v.add(method: "wordVector") { args in
+await w2v.add(method: "wordVector") { args in
     logger.info("wordVector called with: \(args.toDictionary())")
     let result = ["vector": [0.1, 0.2, 0.3]]
     return try MessagePackEncoder().encode(result)
 }
-stellar.add(service: w2v)
+await stellar.add(service: w2v)
 
 // Bind Stellar
 let stellarServer = try await Nebula.bind(stellar, on: SocketAddress(ipAddress: stellarHost, port: stellarPort))

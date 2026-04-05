@@ -49,7 +49,7 @@ struct NMTMiddlewareChainTests {
         let stellar = try ServiceStellar(name: "echo", namespace: "test.echo")
         let svc = Service(name: "echo")
         await svc.add(method: "ping") { _ in Data([1]) }
-        stellar.add(service: svc)
+        await stellar.add(service: svc)
         return stellar
     }
 
@@ -72,9 +72,8 @@ struct NMTMiddlewareChainTests {
     @Test func lastRegistered_runsOutermost() async throws {
         let log = CallLog()
         let stellar = try await echoStellar()
-        stellar
-            .use(TrackingMiddleware(label: "A", log: log))
-            .use(TrackingMiddleware(label: "B", log: log))
+        await stellar.use(TrackingMiddleware(label: "A", log: log))
+        await stellar.use(TrackingMiddleware(label: "B", log: log))
         _ = try await stellar.handle(matter: try callMatter(), channel: dummyChannel())
         let entries = await log.entries
         #expect(entries == ["B:in", "A:in", "A:out", "B:out"])
@@ -84,9 +83,8 @@ struct NMTMiddlewareChainTests {
     @Test func shortCircuit_preventsInnerMiddleware() async throws {
         let log = CallLog()
         let stellar = try await echoStellar()
-        stellar
-            .use(TrackingMiddleware(label: "A", log: log))
-            .use(ShortCircuitMiddleware())
+        await stellar.use(TrackingMiddleware(label: "A", log: log))
+        await stellar.use(ShortCircuitMiddleware())
         _ = try await stellar.handle(matter: try callMatter(), channel: dummyChannel())
         #expect(await log.entries.isEmpty)
     }
@@ -95,7 +93,7 @@ struct NMTMiddlewareChainTests {
     @Test func nonCallMatter_cloneHandledByCore() async throws {
         let log = CallLog()
         let stellar = try await echoStellar()
-        stellar.use(TrackingMiddleware(label: "A", log: log))
+        await stellar.use(TrackingMiddleware(label: "A", log: log))
         let cloneMatter = try Matter.make(type: .clone, body: CloneBody())
         let reply = try await stellar.handle(matter: cloneMatter, channel: dummyChannel())
         let body = try #require(reply).decodeBody(CloneReplyBody.self)
@@ -113,7 +111,7 @@ struct IngressRoutingTests {
         let stellar = try ServiceStellar(name: "echo", namespace: namespace)
         let svc = Service(name: "echo")
         await svc.add(method: "ping") { _ in Data([1]) }
-        stellar.add(service: svc)
+        await stellar.add(service: svc)
         return try await NMTServer.bind(on: try loopbackPort0(), handler: stellar)
     }
 
@@ -186,6 +184,29 @@ struct IngressRoutingTests {
 
 @Suite("Service Actor")
 struct ServiceActorTests {
+
+    /// Concurrent handle() calls on the same ServiceStellar must all succeed.
+    @Test func concurrentHandleCalls() async throws {
+        let stellar = try ServiceStellar(name: "echo", namespace: "test.echo")
+        let svc = Service(name: "echo")
+        await svc.add(method: "ping") { _ in Data([1]) }
+        await stellar.add(service: svc)
+
+        let body = CallBody(namespace: "test.echo", service: "echo", method: "ping", arguments: [])
+        let matter = try Matter.make(type: .call, body: body)
+
+        try await withThrowingTaskGroup(of: Matter?.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    try await stellar.handle(matter: matter, channel: EmbeddedChannel())
+                }
+            }
+            for try await reply in group {
+                let replyBody = try #require(reply).decodeBody(CallReplyBody.self)
+                #expect(replyBody.error == nil)
+            }
+        }
+    }
 
     /// Concurrent add + perform must not crash and must return correct results.
     @Test func concurrentAddAndPerform() async throws {

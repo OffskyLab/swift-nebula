@@ -28,23 +28,16 @@ public typealias ServiceVersion = String
 ///
 /// ```swift
 /// let stellar = try ServiceStellar(name: "account", namespace: "production.mendesky")
-///     .use(LoggingMiddleware())      // inner — runs second
-///     .use(LDAPAuthMiddleware(...))  // outer — runs first
-///     .add(service: accountService)
+/// await stellar.use(LoggingMiddleware())      // inner — runs second
+/// await stellar.use(LDAPAuthMiddleware(...))  // outer — runs first
+/// await stellar.add(service: accountService)
 /// ```
-///
-/// The composed chain is stored directly as a closure; no rebuild happens on
-/// the hot path.
-open class ServiceStellar: @unchecked Sendable, Stellar {
+public actor ServiceStellar: Stellar {
     public let identifier: UUID
     public let name: String
     public let namespace: String
 
-    public internal(set) var availableServices: [ServiceVersion: Service] = [:]
-
-    /// The composed middleware chain. `nil` means no middleware has been
-    /// registered; `handle` falls through directly to `coreDispatch`.
-    /// Each `use(_:)` call wraps this closure with one new outer layer.
+    private var availableServices: [ServiceVersion: Service] = [:]
     private var chain: NMTMiddlewareNext?
 
     public init(name: String, namespace: String, identifier: UUID = UUID()) throws {
@@ -54,21 +47,15 @@ open class ServiceStellar: @unchecked Sendable, Stellar {
         self.namespace = namespace
     }
 
-    /// Wraps the current chain with `middleware` as a new outer layer.
-    /// Must be called during setup, before the server starts serving.
-    @discardableResult
-    public func use(_ middleware: any NMTMiddleware) -> Self {
+    public func use(_ middleware: any NMTMiddleware) {
         let inner: NMTMiddlewareNext = chain ?? { [unowned self] matter in
             try await self.coreDispatch(matter: matter)
         }
         chain = { matter in try await middleware.handle(matter, next: inner) }
-        return self
     }
 
-    @discardableResult
-    public func add(service: Service) -> Self {
+    public func add(service: Service) {
         availableServices[service.name] = service
-        return self
     }
 }
 
@@ -115,7 +102,6 @@ extension ServiceStellar {
         return try envelope.reply(body: reply)
     }
 
-    /// Handle an async enqueue from BrokerAmas — dispatch to service, reply with ACK.
     private func handleEnqueue(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(EnqueueBody.self)
 
