@@ -98,8 +98,7 @@ struct BrokerAmasTests {
         await broker.unsubscribe(subscription: "g1", channel: channel)
 
         try await broker.enqueue(message: makeMessage())
-        await Task.yield()
-        await Task.yield()
+        (channel.eventLoop as! EmbeddedEventLoop).run()
 
         #expect(capture.snapshot().isEmpty)
     }
@@ -125,8 +124,7 @@ struct BrokerAmasTests {
 
         let msg = makeMessage()
         try await broker.enqueue(message: msg)
-        // Allow the unstructured Task spawned inside BrokerAmas.send() to execute.
-        try await Task.sleep(for: .milliseconds(50))
+        (channel.eventLoop as! EmbeddedEventLoop).run()
 
         let matters = capture.snapshot()
         let matter = try #require(matters.first)

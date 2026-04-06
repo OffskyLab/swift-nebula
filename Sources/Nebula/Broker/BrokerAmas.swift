@@ -92,28 +92,32 @@ extension BrokerAmas {
     }
 
     private func send(message: QueuedMatter, to channel: Channel, subscription: String) {
-        Task {
-            do {
-                let body = EnqueueBody(
-                    namespace: message.namespace,
-                    service: message.service,
-                    method: message.method,
-                    arguments: message.arguments
-                )
-                let matter = try Matter.make(
-                    type: .enqueue,
-                    body: body,
-                    matterID: message.id
-                )
+        do {
+            let body = EnqueueBody(
+                namespace: message.namespace,
+                service: message.service,
+                method: message.method,
+                arguments: message.arguments
+            )
+            let matter = try Matter.make(
+                type: .enqueue,
+                body: body,
+                matterID: message.id
+            )
+            pendingAcks[message.id] = PendingAck(
+                message: message,
+                subscription: subscription,
+                channel: channel,
+                sentAt: Date()
+            )
+            channel.eventLoop.execute {
                 channel.writeAndFlush(matter, promise: nil)
-                pendingAcks[message.id] = PendingAck(
-                    message: message,
-                    subscription: subscription,
-                    channel: channel,
-                    sentAt: Date()
-                )
+            }
+            Task {
                 try await scheduleAckTimeout(for: message)
-            } catch {
+            }
+        } catch {
+            Task {
                 await park(message: message)
             }
         }
