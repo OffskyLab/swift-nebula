@@ -40,17 +40,9 @@ final class CapturingHandler: ChannelOutboundHandler {
     }
 }
 
-/// Creates an EmbeddedChannel with a CapturingHandler installed and returns both.
-func makeCapturingChannel() throws -> (EmbeddedChannel, MatterCapture) {
-    let capture = MatterCapture()
-    let channel = EmbeddedChannel()
-    try channel.pipeline.addHandler(CapturingHandler(capture: capture)).wait()
-    return (channel, capture)
-}
-
 /// Creates a thread-safe NIOAsyncTestingChannel with a CapturingHandler installed.
-/// Unlike EmbeddedChannel, NIOAsyncTestingChannel uses a thread-safe event loop,
-/// so it can be used for timeout tests where eventLoop.execute is called from a Task.
+/// NIOAsyncTestingChannel uses a thread-safe event loop, so it is safe to use when
+/// eventLoop.execute is called from a Task (e.g. BrokerAmas.send / ACK timeout).
 func makeAsyncCapturingChannel() -> (NIOAsyncTestingChannel, MatterCapture) {
     let capture = MatterCapture()
     let channel = NIOAsyncTestingChannel()
@@ -103,12 +95,12 @@ struct BrokerAmasTests {
 
     @Test func unsubscribe_preventsOutbound() async throws {
         let broker = try makeBroker()
-        let (channel, capture) = try makeCapturingChannel()
+        let (channel, capture) = makeAsyncCapturingChannel()
         await broker.subscribe(subscription: "g1", channel: channel)
         await broker.unsubscribe(subscription: "g1", channel: channel)
 
         try await broker.enqueue(message: makeMessage())
-        (channel.eventLoop as! EmbeddedEventLoop).run()
+        await (channel.eventLoop as! NIOAsyncTestingEventLoop).run()
 
         #expect(capture.snapshot().isEmpty)
     }
@@ -129,12 +121,12 @@ struct BrokerAmasTests {
 
     @Test func enqueue_withSubscriber_channelReceivesEnqueueMatter() async throws {
         let broker = try makeBroker()
-        let (channel, capture) = try makeCapturingChannel()
+        let (channel, capture) = makeAsyncCapturingChannel()
         await broker.subscribe(subscription: "g1", channel: channel)
 
         let msg = makeMessage()
         try await broker.enqueue(message: msg)
-        (channel.eventLoop as! EmbeddedEventLoop).run()
+        await (channel.eventLoop as! NIOAsyncTestingEventLoop).run()
 
         let matters = capture.snapshot()
         let matter = try #require(matters.first)
@@ -146,15 +138,15 @@ struct BrokerAmasTests {
 
     @Test func enqueue_fanOut_allSubscriptionGroupsReceiveMessage() async throws {
         let broker = try makeBroker()
-        let (channel1, capture1) = try makeCapturingChannel()
-        let (channel2, capture2) = try makeCapturingChannel()
+        let (channel1, capture1) = makeAsyncCapturingChannel()
+        let (channel2, capture2) = makeAsyncCapturingChannel()
         await broker.subscribe(subscription: "g1", channel: channel1)
         await broker.subscribe(subscription: "g2", channel: channel2)
 
         let msg = makeMessage()
         try await broker.enqueue(message: msg)
-        (channel1.eventLoop as! EmbeddedEventLoop).run()
-        (channel2.eventLoop as! EmbeddedEventLoop).run()
+        await (channel1.eventLoop as! NIOAsyncTestingEventLoop).run()
+        await (channel2.eventLoop as! NIOAsyncTestingEventLoop).run()
 
         let matters1 = capture1.snapshot()
         let matter1 = try #require(matters1.first)
@@ -171,8 +163,8 @@ struct BrokerAmasTests {
 
     @Test func enqueue_roundRobin_alternatesAcrossChannelsInSameGroup() async throws {
         let broker = try makeBroker()
-        let (channel1, capture1) = try makeCapturingChannel()
-        let (channel2, capture2) = try makeCapturingChannel()
+        let (channel1, capture1) = makeAsyncCapturingChannel()
+        let (channel2, capture2) = makeAsyncCapturingChannel()
         await broker.subscribe(subscription: "g1", channel: channel1)
         await broker.subscribe(subscription: "g1", channel: channel2)
 
@@ -180,8 +172,8 @@ struct BrokerAmasTests {
         let msg2 = makeMessage()
         try await broker.enqueue(message: msg1)
         try await broker.enqueue(message: msg2)
-        (channel1.eventLoop as! EmbeddedEventLoop).run()
-        (channel2.eventLoop as! EmbeddedEventLoop).run()
+        await (channel1.eventLoop as! NIOAsyncTestingEventLoop).run()
+        await (channel2.eventLoop as! NIOAsyncTestingEventLoop).run()
 
         // msg1 → channel1 (index 0), msg2 → channel2 (index 1)
         let matters1 = capture1.snapshot()
@@ -198,12 +190,12 @@ struct BrokerAmasTests {
     @Test func acknowledge_removesFromActiveQueue() async throws {
         let active = InMemoryQueueStorage()
         let broker = try makeBroker(active: active)
-        let (channel, _) = try makeCapturingChannel()
+        let (channel, _) = makeAsyncCapturingChannel()
         await broker.subscribe(subscription: "g1", channel: channel)
 
         let msg = makeMessage()
         try await broker.enqueue(message: msg)
-        (channel.eventLoop as! EmbeddedEventLoop).run()
+        await (channel.eventLoop as! NIOAsyncTestingEventLoop).run()
 
         await broker.acknowledge(matterID: msg.id)
 
@@ -251,12 +243,12 @@ struct BrokerAmasTests {
         let active = InMemoryQueueStorage()
         let parked = InMemoryQueueStorage()
         let broker = try fastBroker(maxRetries: 1, active: active, parked: parked)
-        let (channel, _) = try makeCapturingChannel()
+        let (channel, _) = makeAsyncCapturingChannel()
         await broker.subscribe(subscription: "g1", channel: channel)
 
         let msg = makeMessage()
         try await broker.enqueue(message: msg)
-        (channel.eventLoop as! EmbeddedEventLoop).run()
+        await (channel.eventLoop as! NIOAsyncTestingEventLoop).run()
 
         // Wait for ACK timeout to fire and park the message
         try await Task.sleep(for: .milliseconds(150))
