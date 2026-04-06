@@ -15,12 +15,12 @@ public actor StandardGalaxy: Galaxy {
     public let identifier: UUID
     public let name: String
 
-    /// LoadBalanceAmas instances keyed by namespace (RPC path).
-    private var managedAmas: [String: LoadBalanceAmas] = [:]
-    /// BrokerAmas instances keyed by namespace (broker path).
-    private var managedBrokerAmas: [String: BrokerAmas] = [:]
+    /// LoadBalanceCluster instances keyed by namespace (RPC path).
+    private var managedClusters: [String: LoadBalanceCluster] = [:]
+    /// BrokerCluster instances keyed by namespace (broker path).
+    private var managedBrokerClusters: [String: BrokerCluster] = [:]
 
-    /// Global default retry policy for all BrokerAmas instances.
+    /// Global default retry policy for all BrokerCluster instances.
     private let defaultRetryPolicy: RetryPolicy
     /// Per-namespace retry policy overrides.
     private var retryPolicyOverrides: [String: RetryPolicy] = [:]
@@ -77,19 +77,19 @@ extension StandardGalaxy {
     private func handleRegister(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(RegisterBody.self)
         let address = try SocketAddress.makeAddressResolvingHost(body.host, port: body.port)
-        let amas = try amasFor(namespace: body.namespace)
-        try await amas.addStellar(namespace: body.namespace, endpoint: address)
+        let cluster = try clusterFor(namespace: body.namespace)
+        try await cluster.addStellar(namespace: body.namespace, endpoint: address)
         return try envelope.reply(body: RegisterReplyBody(status: "ok"))
     }
 
     private func handleFind(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(FindBody.self)
 
-        guard let amas = managedAmas[body.namespace] else {
+        guard let cluster = managedClusters[body.namespace] else {
             return try envelope.reply(body: FindReplyBody())
         }
 
-        let address = try await amas.allocateStellar(for: body.namespace)
+        let address = try await cluster.allocateStellar(for: body.namespace)
         return try envelope.reply(body: FindReplyBody(
             stellarHost: address.ipAddress,
             stellarPort: address.port
@@ -99,12 +99,12 @@ extension StandardGalaxy {
     private func handleUnregister(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(UnregisterBody.self)
 
-        guard let amas = managedAmas[body.namespace] else {
+        guard let cluster = managedClusters[body.namespace] else {
             return try envelope.reply(body: UnregisterReplyBody())
         }
 
-        await amas.removeStellar(namespace: body.namespace, host: body.host, port: body.port)
-        let next = try? await amas.allocateStellar(for: body.namespace)
+        await cluster.removeStellar(namespace: body.namespace, host: body.host, port: body.port)
+        let next = try? await cluster.allocateStellar(for: body.namespace)
         return try envelope.reply(body: UnregisterReplyBody(
             nextHost: next?.ipAddress,
             nextPort: next?.port
@@ -127,7 +127,7 @@ extension StandardGalaxy {
 
     private func handleEnqueue(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(EnqueueBody.self)
-        let broker = try brokerAmasFor(namespace: body.namespace)
+        let broker = try brokerClusterFor(namespace: body.namespace)
         let message = QueuedMatter(
             id: envelope.matterID,
             namespace: body.namespace,
@@ -142,7 +142,7 @@ extension StandardGalaxy {
     private func handleAck(envelope: Matter) async throws -> Matter? {
         let body = try envelope.decodeBody(AckBody.self)
         guard let matterID = UUID(uuidString: body.matterID) else { return nil }
-        for broker in managedBrokerAmas.values {
+        for broker in managedBrokerClusters.values {
             await broker.acknowledge(matterID: matterID)
         }
         return nil
@@ -150,39 +150,39 @@ extension StandardGalaxy {
 
     private func handleSubscribe(envelope: Matter, channel: Channel) async throws -> Matter? {
         let body = try envelope.decodeBody(SubscribeBody.self)
-        let broker = try brokerAmasFor(namespace: body.topic)
+        let broker = try brokerClusterFor(namespace: body.topic)
         await broker.subscribe(subscription: body.subscription, channel: channel)
         return try envelope.reply(body: RegisterReplyBody(status: "ok"))
     }
 
     private func handleUnsubscribe(envelope: Matter, channel: Channel) async throws -> Matter? {
         let body = try envelope.decodeBody(UnsubscribeBody.self)
-        guard let broker = managedBrokerAmas[body.topic] else { return nil }
+        guard let broker = managedBrokerClusters[body.topic] else { return nil }
         await broker.unsubscribe(subscription: body.subscription, channel: channel)
         return try envelope.reply(body: RegisterReplyBody(status: "ok"))
     }
 }
 
-// MARK: - Amas Management
+// MARK: - Cluster Management
 
 extension StandardGalaxy {
 
-    private func amasFor(namespace: String) throws -> LoadBalanceAmas {
-        if let existing = managedAmas[namespace] { return existing }
+    private func clusterFor(namespace: String) throws -> LoadBalanceCluster {
+        if let existing = managedClusters[namespace] { return existing }
         let segments = namespace.split(separator: ".")
-        let amasName = segments.count > 1 ? String(segments[1]) : namespace
-        let amas = try LoadBalanceAmas(name: amasName, namespace: namespace)
-        managedAmas[namespace] = amas
-        return amas
+        let clusterName = segments.count > 1 ? String(segments[1]) : namespace
+        let cluster = try LoadBalanceCluster(name: clusterName, namespace: namespace)
+        managedClusters[namespace] = cluster
+        return cluster
     }
 
-    private func brokerAmasFor(namespace: String) throws -> BrokerAmas {
-        if let existing = managedBrokerAmas[namespace] { return existing }
+    private func brokerClusterFor(namespace: String) throws -> BrokerCluster {
+        if let existing = managedBrokerClusters[namespace] { return existing }
         let segments = namespace.split(separator: ".")
-        let amasName = segments.count > 1 ? String(segments[1]) : namespace
+        let clusterName = segments.count > 1 ? String(segments[1]) : namespace
         let policy = retryPolicyOverrides[namespace] ?? defaultRetryPolicy
-        let broker = try BrokerAmas(name: amasName, namespace: namespace, retryPolicy: policy)
-        managedBrokerAmas[namespace] = broker
+        let broker = try BrokerCluster(name: clusterName, namespace: namespace, retryPolicy: policy)
+        managedBrokerClusters[namespace] = broker
         return broker
     }
 }
@@ -193,7 +193,7 @@ extension StandardGalaxy {
 
     /// Register a Stellar endpoint under a namespace (server-side, in-process).
     public func register(namespace: String, stellarEndpoint: SocketAddress) async throws {
-        let amas = try amasFor(namespace: namespace)
-        try await amas.addStellar(namespace: namespace, endpoint: stellarEndpoint)
+        let cluster = try clusterFor(namespace: namespace)
+        try await cluster.addStellar(namespace: namespace, endpoint: stellarEndpoint)
     }
 }

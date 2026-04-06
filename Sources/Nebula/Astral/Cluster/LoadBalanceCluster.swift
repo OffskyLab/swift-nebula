@@ -1,5 +1,5 @@
 //
-//  LoadBalanceAmas.swift
+//  LoadBalanceCluster.swift
 //
 //
 //  Created by Grady Zhuo on 2026/3/22.
@@ -19,9 +19,9 @@ private struct PendingStellar {
     let address: SocketAddress
 }
 
-/// Amas that manages a pool of Stellar instances with round-robin load balancing.
+/// Cluster that manages a pool of Stellar instances with round-robin load balancing.
 /// Used internally by Galaxy — not exposed as a standalone TCP server.
-public actor LoadBalanceAmas: Amas {
+public actor LoadBalanceCluster: Cluster {
     public let identifier: UUID
     public let name: String
     public let namespace: String
@@ -32,7 +32,7 @@ public actor LoadBalanceAmas: Amas {
 
     public init(name: String, namespace: String, identifier: UUID = UUID()) throws {
         guard !name.contains(".") else {
-            throw NebulaError.fail(message: "Amas name must not contain '.': \"\(name)\"")
+            throw NebulaError.fail(message: "Cluster name must not contain '.': \"\(name)\"")
         }
         self.identifier = identifier
         self.name = name
@@ -42,7 +42,7 @@ public actor LoadBalanceAmas: Amas {
 
 // MARK: - Stellar Pool Management
 
-extension LoadBalanceAmas {
+extension LoadBalanceCluster {
 
     /// Add a Stellar to the pool.
     public func addStellar(namespace: String, endpoint: SocketAddress) async throws {

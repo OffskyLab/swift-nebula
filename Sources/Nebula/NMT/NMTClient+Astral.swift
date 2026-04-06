@@ -70,7 +70,7 @@ public struct IngressClient: Sendable {
         }
     }
 
-    /// Enqueue an async task via Ingress → Galaxy → BrokerAmas.
+    /// Enqueue an async task via Ingress → Galaxy → BrokerCluster.
     public func enqueue(
         namespace: String,
         service: String,

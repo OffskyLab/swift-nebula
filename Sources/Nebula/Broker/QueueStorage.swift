@@ -9,7 +9,7 @@ import Foundation
 
 /// Pluggable storage backend for a single queue (active or parked).
 ///
-/// `BrokerAmas` holds two `QueueStorage` instances independently —
+/// `BrokerCluster` holds two `QueueStorage` instances independently —
 /// one for the active dispatch queue and one for parked messages.
 /// This allows mixing backends, e.g. in-memory active + SQLite parked.
 public protocol QueueStorage: Sendable {

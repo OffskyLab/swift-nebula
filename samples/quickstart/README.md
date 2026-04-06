@@ -15,7 +15,7 @@ Ingress (:6224)          ← entry point; routes find/call to the right Galaxy
   ▼
 Galaxy (:62200)          ← service registry; maps namespace → Stellar address
   │
-  └── Amas              ← load balancer (auto-managed by Galaxy)
+  └── Cluster              ← load balancer (auto-managed by Galaxy)
         │
         ▼
       Stellar (:62300)   ← service host; registers itself on startup
@@ -94,7 +94,7 @@ The client uses a URI to describe the full path to the service:
 ```
 nmtp://127.0.0.1:6224/production/ml/embedding
        └───────────┘  └────────────────────────┘
-       Ingress addr    namespace (Galaxy/Amas/Stellar)
+       Ingress addr    namespace (Galaxy/Cluster/Stellar)
 ```
 
 ### Call flow

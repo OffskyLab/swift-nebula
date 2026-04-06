@@ -115,7 +115,7 @@ struct IngressRoutingTests {
         return try await NMTServer.bind(on: try loopbackPort0(), handler: stellar)
     }
 
-    /// Planet-side `find` via Ingress → Galaxy → Amas returns a Stellar address.
+    /// Planet-side `find` via Ingress → Galaxy → Cluster returns a Stellar address.
     @Test func find_returnsStellarAddress() async throws {
         let galaxy = try StandardGalaxy(name: "test")
         let galaxyServer = try await NMTServer.bind(on: try loopbackPort0(), handler: galaxy)
@@ -141,7 +141,7 @@ struct IngressRoutingTests {
         #expect(result.stellarAddress != nil)
     }
 
-    /// `unregister` via Ingress → Galaxy → Amas removes the dead Stellar and returns the next one.
+    /// `unregister` via Ingress → Galaxy → Cluster removes the dead Stellar and returns the next one.
     @Test func unregister_removesDeadStellarAndReturnsNext() async throws {
         let galaxy = try StandardGalaxy(name: "test")
         let galaxyServer = try await NMTServer.bind(on: try loopbackPort0(), handler: galaxy)

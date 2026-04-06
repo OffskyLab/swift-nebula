@@ -1,5 +1,5 @@
 //
-//  BrokerAmas.swift
+//  BrokerCluster.swift
 //
 //
 //  Created by Grady Zhuo on 2026/3/30.
@@ -9,15 +9,15 @@ import Foundation
 import NIO
 import NMTP
 
-/// An Amas that handles async messaging — MQ and Pub/Sub.
+/// A Cluster that handles async messaging — MQ and Pub/Sub.
 ///
-/// Unlike `LoadBalanceAmas` (load balancer only), `BrokerAmas` manages:
+/// Unlike `LoadBalanceCluster` (load balancer only), `BrokerCluster` manages:
 /// - A topic + subscription model (fan-out to all groups, round-robin within each group)
 /// - At-least-once delivery via ACK + retry
 /// - Parked messages when retries are exhausted
 ///
-/// `BrokerAmas` is system-managed by Galaxy for `nmtp+broker://` namespaces.
-public actor BrokerAmas: Amas {
+/// `BrokerCluster` is system-managed by Galaxy for `nmtp+broker://` namespaces.
+public actor BrokerCluster: Cluster {
     public let identifier: UUID
     public let name: String
     public let namespace: String
@@ -41,7 +41,7 @@ public actor BrokerAmas: Amas {
         retryPolicy: RetryPolicy = .default
     ) throws {
         guard !name.contains(".") else {
-            throw NebulaError.fail(message: "BrokerAmas name must not contain '.': \"\(name)\"")
+            throw NebulaError.fail(message: "BrokerCluster name must not contain '.': \"\(name)\"")
         }
         self.identifier = identifier
         self.name = name
@@ -54,7 +54,7 @@ public actor BrokerAmas: Amas {
 
 // MARK: - Subscription Management
 
-extension BrokerAmas {
+extension BrokerCluster {
 
     /// Register a subscriber channel under a named subscription group.
     func subscribe(subscription: String, channel: Channel) {
@@ -70,7 +70,7 @@ extension BrokerAmas {
 
 // MARK: - Enqueue & Dispatch
 
-extension BrokerAmas {
+extension BrokerCluster {
 
     /// Accept an inbound message from Comet, persist it, and start dispatch.
     func enqueue(message: QueuedMatter) async throws {
@@ -133,7 +133,7 @@ extension BrokerAmas {
 
 // MARK: - ACK & Retry
 
-extension BrokerAmas {
+extension BrokerCluster {
 
     /// Called when a subscriber sends back an `.ack` for a message.
     func acknowledge(matterID: UUID) async {

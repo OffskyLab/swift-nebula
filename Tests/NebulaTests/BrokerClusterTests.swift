@@ -1,4 +1,4 @@
-// Tests/NebulaTests/BrokerAmasTests.swift
+// Tests/NebulaTests/BrokerClusterTests.swift
 import Testing
 import Foundation
 import NIO
@@ -42,7 +42,7 @@ final class CapturingHandler: ChannelOutboundHandler {
 
 /// Creates a thread-safe NIOAsyncTestingChannel with a CapturingHandler installed.
 /// NIOAsyncTestingChannel uses a thread-safe event loop, so it is safe to use when
-/// eventLoop.execute is called from a Task (e.g. BrokerAmas.send / ACK timeout).
+/// eventLoop.execute is called from a Task (e.g. BrokerCluster.send / ACK timeout).
 func makeAsyncCapturingChannel() -> (NIOAsyncTestingChannel, MatterCapture) {
     let capture = MatterCapture()
     let channel = NIOAsyncTestingChannel()
@@ -52,8 +52,8 @@ func makeAsyncCapturingChannel() -> (NIOAsyncTestingChannel, MatterCapture) {
 
 // MARK: - Suite
 
-@Suite("BrokerAmas")
-struct BrokerAmasTests {
+@Suite("BrokerCluster")
+struct BrokerClusterTests {
 
     // MARK: - Helpers
 
@@ -66,8 +66,8 @@ struct BrokerAmasTests {
     private func makeBroker(
         active: InMemoryQueueStorage = InMemoryQueueStorage(),
         parked: InMemoryQueueStorage = InMemoryQueueStorage()
-    ) throws -> BrokerAmas {
-        try BrokerAmas(name: "broker", namespace: "test.broker",
+    ) throws -> BrokerCluster {
+        try BrokerCluster(name: "broker", namespace: "test.broker",
                        active: active, parked: parked)
     }
 
@@ -76,8 +76,8 @@ struct BrokerAmasTests {
         maxRetries: Int = 2,
         active: InMemoryQueueStorage = InMemoryQueueStorage(),
         parked: InMemoryQueueStorage = InMemoryQueueStorage()
-    ) throws -> BrokerAmas {
-        try BrokerAmas(name: "broker", namespace: "test.broker",
+    ) throws -> BrokerCluster {
+        try BrokerCluster(name: "broker", namespace: "test.broker",
                        active: active, parked: parked,
                        retryPolicy: RetryPolicy(maxRetries: maxRetries,
                                                 ackTimeout: .milliseconds(50)))
@@ -87,7 +87,7 @@ struct BrokerAmasTests {
 
     @Test func init_withDotInName_throws() {
         #expect(throws: (any Error).self) {
-            try BrokerAmas(name: "bad.name", namespace: "test.broker")
+            try BrokerCluster(name: "bad.name", namespace: "test.broker")
         }
     }
 
