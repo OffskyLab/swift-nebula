@@ -55,6 +55,39 @@ extension NMTClient where Target == IngressTarget {
         }
     }
 
+    /// Enqueue an async task via Ingress → Galaxy → BrokerAmas.
+    /// Returns once BrokerAmas confirms receipt.
+    public func enqueue(
+        namespace: String,
+        service: String,
+        method: String,
+        arguments: [Argument] = []
+    ) async throws {
+        let body = EnqueueBody(
+            namespace: namespace,
+            service: service,
+            method: method,
+            arguments: arguments.toEncoded()
+        )
+        let envelope = try Matter.make(type: .enqueue, body: body)
+        let reply = try await request(envelope: envelope)
+        let replyBody = try reply.decodeBody(RegisterReplyBody.self)
+        guard replyBody.status == "queued" else {
+            throw NebulaError.fail(message: "Enqueue failed: \(replyBody.status)")
+        }
+    }
+
+    /// Find the Galaxy address that manages a broker topic via Ingress.
+    public func findGalaxy(topic: String) async throws -> SocketAddress? {
+        let body = FindGalaxyBody(topic: topic)
+        let envelope = try Matter.make(type: .findGalaxy, body: body)
+        let reply = try await request(envelope: envelope)
+        let replyBody = try reply.decodeBody(FindGalaxyReplyBody.self)
+
+        guard let host = replyBody.galaxyHost, let port = replyBody.galaxyPort else { return nil }
+        return try SocketAddress.makeAddressResolvingHost(host, port: port)
+    }
+
     /// Notify Ingress that a Stellar is dead (forwarded to Galaxy). Returns next Stellar.
     public func unregister(namespace: String, host: String, port: Int) async throws -> UnregisterResult {
         let body = UnregisterBody(namespace: namespace, host: host, port: port)

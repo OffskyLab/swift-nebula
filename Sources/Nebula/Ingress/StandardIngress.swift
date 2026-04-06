@@ -16,7 +16,7 @@ import NIO
 ///
 /// Default port: 2240
 public actor StandardIngress {
-    public static let defaultPort: Int = 2240
+    public static let defaultPort: Int = 6224
 
     public let identifier: UUID
     public let name: String
@@ -36,7 +36,7 @@ public actor StandardIngress {
 
 extension StandardIngress: NMTServerTarget {
 
-    public func handle(envelope: Matter) async throws -> Matter? {
+    public func handle(envelope: Matter, channel: Channel) async throws -> Matter? {
         switch envelope.type {
         case .register:
             return try handleRegister(envelope: envelope)
@@ -44,6 +44,10 @@ extension StandardIngress: NMTServerTarget {
             return try await handleFind(envelope: envelope)
         case .unregister:
             return try await handleUnregister(envelope: envelope)
+        case .enqueue:
+            return try await handleEnqueue(envelope: envelope)
+        case .findGalaxy:
+            return try handleFindGalaxy(envelope: envelope)
         case .clone:
             return try makeCloneReply(envelope: envelope)
         default:
@@ -94,6 +98,36 @@ extension StandardIngress {
         let galaxyReply = try await client.request(envelope: unregEnvelope)
         let replyBody = try galaxyReply.decodeBody(UnregisterReplyBody.self)
         return try envelope.reply(body: replyBody)
+    }
+
+    /// Handle enqueue from Comet: forward to the Galaxy that owns the namespace.
+    private func handleEnqueue(envelope: Matter) async throws -> Matter {
+        let body = try envelope.decodeBody(EnqueueBody.self)
+        let galaxyName = String(body.namespace.split(separator: ".").first ?? Substring(body.namespace))
+
+        guard let galaxyAddress = galaxyRegistry[galaxyName] else {
+            return try envelope.reply(body: RegisterReplyBody(status: "no-galaxy"))
+        }
+
+        let client = try await galaxyClient(for: galaxyName, at: galaxyAddress)
+        let enqueueEnvelope = try Matter.make(type: .enqueue, body: body)
+        let galaxyReply = try await client.request(envelope: enqueueEnvelope)
+        let replyBody = try galaxyReply.decodeBody(RegisterReplyBody.self)
+        return try envelope.reply(body: replyBody)
+    }
+
+    /// Handle broker Galaxy discovery: return the Galaxy address for a given topic.
+    private func handleFindGalaxy(envelope: Matter) throws -> Matter {
+        let body = try envelope.decodeBody(FindGalaxyBody.self)
+        let galaxyName = String(body.topic.split(separator: ".").first ?? Substring(body.topic))
+
+        guard let address = galaxyRegistry[galaxyName] else {
+            return try envelope.reply(body: FindGalaxyReplyBody())
+        }
+        return try envelope.reply(body: FindGalaxyReplyBody(
+            galaxyHost: address.ipAddress,
+            galaxyPort: address.port
+        ))
     }
 
     private func makeCloneReply(envelope: Matter) throws -> Matter {

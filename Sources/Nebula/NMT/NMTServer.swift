@@ -6,17 +6,26 @@
 //
 
 import Foundation
+import Logging
 import NIO
 
 public final class NMTServer<Target: NMTServerTarget>: Sendable {
     public let address: SocketAddress
     public let target: Target
     private let channel: Channel
+    /// Non-nil only when NMTServer created the ELG itself (no caller-supplied group).
+    private let ownedEventLoopGroup: MultiThreadedEventLoopGroup?
 
-    internal init(address: SocketAddress, target: Target, channel: Channel) {
+    internal init(
+        address: SocketAddress,
+        target: Target,
+        channel: Channel,
+        ownedEventLoopGroup: MultiThreadedEventLoopGroup?
+    ) {
         self.address = address
         self.target = target
         self.channel = channel
+        self.ownedEventLoopGroup = ownedEventLoopGroup
     }
 }
 
@@ -29,9 +38,8 @@ extension NMTServer {
         target: Target,
         eventLoopGroup: MultiThreadedEventLoopGroup? = nil
     ) async throws -> NMTServer<Target> {
-        let elg = eventLoopGroup ?? MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        let handler = NMTServerInboundHandler(target: target)
-
+        let owned = eventLoopGroup == nil ? MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount) : nil
+        let elg = eventLoopGroup ?? owned!
         let channel = try await ServerBootstrap(group: elg)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelOption(.socketOption(.so_reuseaddr), value: 1)
@@ -39,14 +47,14 @@ extension NMTServer {
                 channel.pipeline.addHandlers([
                     ByteToMessageHandler(MatterDecoder()),
                     MessageToByteHandler(MatterEncoder()),
-                    handler,
+                    NMTServerInboundHandler(target: target),
                 ])
             }
             .bind(to: address)
             .get()
 
         let boundAddress = channel.localAddress ?? address
-        return NMTServer(address: boundAddress, target: target, channel: channel)
+        return NMTServer(address: boundAddress, target: target, channel: channel, ownedEventLoopGroup: owned)
     }
 }
 
@@ -56,10 +64,17 @@ extension NMTServer {
 
     public func listen() async throws {
         try await channel.closeFuture.get()
+        try await ownedEventLoopGroup?.shutdownGracefully()
     }
 
     public func stop() async throws {
         try await channel.close().get()
+        try await ownedEventLoopGroup?.shutdownGracefully()
+    }
+
+    /// Close the channel immediately without waiting (safe to call from sync contexts).
+    public func closeNow() {
+        channel.close(promise: nil)
     }
 }
 
@@ -70,6 +85,7 @@ private final class NMTServerInboundHandler: ChannelInboundHandler, @unchecked S
     typealias OutboundOut = Matter
 
     private let target: any NMTServerTarget
+    private let logger = Logger(label: "nebula.nmt.server")
 
     init(target: some NMTServerTarget) {
         self.target = target
@@ -81,10 +97,11 @@ private final class NMTServerInboundHandler: ChannelInboundHandler, @unchecked S
 
         Task {
             do {
-                if let reply = try await target.handle(envelope: envelope) {
+                if let reply = try await target.handle(envelope: envelope, channel: channel) {
                     channel.writeAndFlush(reply, promise: nil)
                 }
             } catch {
+                logger.error("handler error: \(error)")
                 channel.close(promise: nil)
             }
         }

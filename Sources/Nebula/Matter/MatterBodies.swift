@@ -69,6 +69,28 @@ public struct FindReplyBody: Codable, Sendable {
     }
 }
 
+// MARK: - FindGalaxy (Broker discovery)
+
+public struct FindGalaxyBody: Codable, Sendable {
+    /// Fully qualified broker topic, e.g. "production.orders.jobs"
+    public var topic: String
+
+    public init(topic: String) {
+        self.topic = topic
+    }
+}
+
+public struct FindGalaxyReplyBody: Codable, Sendable {
+    /// Galaxy address that manages this broker topic (nil = not found)
+    public var galaxyHost: String?
+    public var galaxyPort: Int?
+
+    public init(galaxyHost: String? = nil, galaxyPort: Int? = nil) {
+        self.galaxyHost = galaxyHost
+        self.galaxyPort = galaxyPort
+    }
+}
+
 // MARK: - Unregister
 
 public struct UnregisterBody: Codable, Sendable {
@@ -119,6 +141,66 @@ public struct EncodedArgument: Codable, Sendable {
         self.value = value
     }
 }
+
+// MARK: - Enqueue / ACK
+
+public struct EnqueueBody: Codable, Sendable {
+    public var namespace: String
+    public var service: String
+    public var method: String
+    public var arguments: [EncodedArgument]
+
+    public init(namespace: String, service: String, method: String, arguments: [EncodedArgument]) {
+        self.namespace = namespace
+        self.service = service
+        self.method = method
+        self.arguments = arguments
+    }
+}
+
+public struct AckBody: Codable, Sendable {
+    public var matterID: String
+
+    public init(matterID: String) {
+        self.matterID = matterID
+    }
+}
+
+// MARK: - Subscribe / Event
+
+public struct SubscribeBody: Codable, Sendable {
+    public var topic: String
+    public var subscription: String
+
+    public init(topic: String, subscription: String) {
+        self.topic = topic
+        self.subscription = subscription
+    }
+}
+
+public struct UnsubscribeBody: Codable, Sendable {
+    public var topic: String
+    public var subscription: String
+
+    public init(topic: String, subscription: String) {
+        self.topic = topic
+        self.subscription = subscription
+    }
+}
+
+public struct EventBody: Codable, Sendable {
+    public var topic: String
+    public var method: String
+    public var arguments: [EncodedArgument]
+
+    public init(topic: String, method: String, arguments: [EncodedArgument]) {
+        self.topic = topic
+        self.method = method
+        self.arguments = arguments
+    }
+}
+
+// MARK: - Call Reply
 
 public struct CallReplyBody: Codable, Sendable {
     public var result: Data?

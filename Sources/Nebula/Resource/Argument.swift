@@ -48,6 +48,13 @@ extension Array where Element == Argument {
     }
 }
 
+extension Array where Element == EncodedArgument {
+
+    public func toArguments() -> [Argument] {
+        return self.map { Argument(key: $0.key, data: $0.value) }
+    }
+}
+
 // MARK: - AnyDecodable Helper
 
 private struct AnyDecodable: Decodable {
