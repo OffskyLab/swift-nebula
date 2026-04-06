@@ -53,8 +53,8 @@ jobs:
       - uses: SwiftyLab/setup-swift@v1
         with:
           swift-version: "6.2"
-      - name: Build demo
-        run: swift build --package-path samples/demo
+      - name: Build quickstart
+        run: swift build --package-path samples/quickstart
 
   # Offline build on additional Linux distributions.
   # Uses `docker run` instead of the `container:` directive so that

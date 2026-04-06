@@ -18,10 +18,10 @@ swift test --filter NebulaTests.<TestClassName>/<testMethodName>
 
 ## Demo Workflow
 
-The demo is a standalone package under `samples/demo/`:
+The demo is a standalone package under `samples/quickstart/`:
 
 ```bash
-cd samples/demo
+cd samples/quickstart
 swift run    # Starts Galaxy + Stellar + Planet client together; Ctrl+C to stop
 ```
 
@@ -104,6 +104,15 @@ Do not introduce generic networking terminology (`message`, `packet`, `frame`, `
 - `NMTClient` matches replies to pending requests using UUID `messageID` from the envelope header, using `CheckedContinuation`.
 - NIO pipeline uses `ByteToMessageHandler(EnvelopeDecoder)` and `MessageToByteHandler(EnvelopeEncoder)`.
 - `NMTServer.bind` stores `channel.localAddress` (not the requested address), so port 0 works correctly for OS-assigned ports.
+
+### Platform Policy: Linux First
+
+This project and all related repos (`swift-nmtp`, `swift-nebula-client`) are **Linux-first**. All three repos run as server infrastructure on Linux.
+
+- **Do not use Apple-only APIs** — no `import os`, no `OSAllocatedUnfairLock`, no `Foundation` types that are macOS-only.
+- **Use cross-platform Swift stdlib and open-source packages only.** Prefer `Synchronization.Mutex` over `OSAllocatedUnfairLock`, `NIOLock` over `NSLock`, etc.
+- **macOS is development-only.** The minimum macOS version is set to `.macOS(.v15)` solely so `Synchronization.Mutex` compiles on Apple platforms during local development. It is not a supported deployment target.
+- When in doubt, check that the API exists in the Swift open-source repo or swift-corelibs — not just the Apple SDK.
 
 ### Dependencies
 

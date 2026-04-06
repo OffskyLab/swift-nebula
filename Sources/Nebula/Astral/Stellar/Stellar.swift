@@ -7,6 +7,7 @@
 
 import Foundation
 import NIO
+import NMTP
 
 public protocol Stellar: Astral {
     /// Fully qualified namespace in forward order, e.g. "production.ml.embedding"
@@ -23,27 +24,20 @@ public typealias ServiceVersion = String
 ///
 /// Middlewares are stacked via ``use(_:)`` before the server starts.
 /// Each call to `use()` wraps the current chain from the outside, so the
-/// **last-registered middleware runs outermost** (first to receive each envelope).
+/// **last-registered middleware runs outermost** (first to receive each matter).
 ///
 /// ```swift
 /// let stellar = try ServiceStellar(name: "account", namespace: "production.mendesky")
-///     .use(LoggingMiddleware())      // inner — runs second
-///     .use(LDAPAuthMiddleware(...))  // outer — runs first
-///     .add(service: accountService)
+/// await stellar.use(LoggingMiddleware())      // inner — runs second
+/// await stellar.use(LDAPAuthMiddleware(...))  // outer — runs first
+/// await stellar.add(service: accountService)
 /// ```
-///
-/// The composed chain is stored directly as a closure; no rebuild happens on
-/// the hot path.
-open class ServiceStellar: @unchecked Sendable, Stellar {
+public actor ServiceStellar: Stellar {
     public let identifier: UUID
     public let name: String
     public let namespace: String
 
-    public internal(set) var availableServices: [ServiceVersion: Service] = [:]
-
-    /// The composed middleware chain. `nil` means no middleware has been
-    /// registered; `handle` falls through directly to `coreDispatch`.
-    /// Each `use(_:)` call wraps this closure with one new outer layer.
+    private var availableServices: [ServiceVersion: Service] = [:]
     private var chain: NMTMiddlewareNext?
 
     public init(name: String, namespace: String, identifier: UUID = UUID()) throws {
@@ -53,21 +47,15 @@ open class ServiceStellar: @unchecked Sendable, Stellar {
         self.namespace = namespace
     }
 
-    /// Wraps the current chain with `middleware` as a new outer layer.
-    /// Must be called during setup, before the server starts serving.
-    @discardableResult
-    public func use(_ middleware: any NMTMiddleware) -> Self {
-        let inner: NMTMiddlewareNext = chain ?? { [unowned self] envelope in
-            try await self.coreDispatch(envelope: envelope)
+    public func use(_ middleware: any NMTMiddleware) {
+        let inner: NMTMiddlewareNext = chain ?? { [unowned self] matter in
+            try await self.coreDispatch(matter: matter)
         }
-        chain = { envelope in try await middleware.handle(envelope, next: inner) }
-        return self
+        chain = { matter in try await middleware.handle(matter, next: inner) }
     }
 
-    @discardableResult
-    public func add(service: Service) -> Self {
+    public func add(service: Service) {
         availableServices[service.name] = service
-        return self
     }
 }
 
@@ -75,11 +63,11 @@ open class ServiceStellar: @unchecked Sendable, Stellar {
 
 extension ServiceStellar: NMTServerTarget {
 
-    public func handle(envelope: Matter, channel: Channel) async throws -> Matter? {
+    public func handle(matter: Matter, channel: Channel) async throws -> Matter? {
         if let chain {
-            return try await chain(envelope)
+            return try await chain(matter)
         }
-        return try await coreDispatch(envelope: envelope)
+        return try await coreDispatch(matter: matter)
     }
 }
 
@@ -87,14 +75,14 @@ extension ServiceStellar: NMTServerTarget {
 
 extension ServiceStellar {
 
-    private func coreDispatch(envelope: Matter) async throws -> Matter? {
-        switch envelope.type {
+    private func coreDispatch(matter: Matter) async throws -> Matter? {
+        switch matter.type {
         case .call:
-            return try await handleCall(envelope: envelope)
+            return try await handleCall(envelope: matter)
         case .enqueue:
-            return try await handleEnqueue(envelope: envelope)
+            return try await handleEnqueue(envelope: matter)
         case .clone:
-            return try makeCloneReply(envelope: envelope)
+            return try makeCloneReply(envelope: matter)
         default:
             return nil
         }
@@ -114,7 +102,6 @@ extension ServiceStellar {
         return try envelope.reply(body: reply)
     }
 
-    /// Handle an async enqueue from BrokerAmas — dispatch to service, reply with ACK.
     private func handleEnqueue(envelope: Matter) async throws -> Matter {
         let body = try envelope.decodeBody(EnqueueBody.self)
 

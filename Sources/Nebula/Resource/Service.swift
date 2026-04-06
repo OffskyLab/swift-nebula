@@ -6,8 +6,9 @@
 //
 
 import Foundation
+import NMTP
 
-public class Service: @unchecked Sendable {
+public actor Service {
     public let name: String
     public let version: String?
     public internal(set) var methods: [String: any Method] = [:]
@@ -16,27 +17,18 @@ public class Service: @unchecked Sendable {
         self.name = name
         self.version = version
     }
-
-    public convenience init(name: String, version: String? = nil, action: @escaping MethodAction) {
-        self.init(name: name, version: version)
-        add(method: ServiceMethod(name: name, action: action))
-    }
 }
 
 // MARK: - Method Management
 
 extension Service {
 
-    @discardableResult
-    public func add(method: ServiceMethod) -> Self {
+    public func add(method: ServiceMethod) {
         methods[method.name] = method
-        return self
     }
 
-    @discardableResult
-    public func add(method name: String, action: @escaping MethodAction) -> Self {
+    public func add(method name: String, action: @escaping MethodAction) {
         methods[name] = ServiceMethod(name: name, action: action)
-        return self
     }
 }
 
