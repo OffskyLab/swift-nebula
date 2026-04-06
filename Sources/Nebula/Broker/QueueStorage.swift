@@ -9,7 +9,7 @@ import Foundation
 
 /// Pluggable storage backend for a single queue (active or parked).
 ///
-/// `BrokerAmas` holds two `QueueStorage` instances independently —
+/// `BrokerCluster` holds two `QueueStorage` instances independently —
 /// one for the active dispatch queue and one for parked messages.
 /// This allows mixing backends, e.g. in-memory active + SQLite parked.
 public protocol QueueStorage: Sendable {
@@ -28,8 +28,10 @@ public actor InMemoryQueueStorage: QueueStorage {
     public init() {}
 
     public func append(_ message: QueuedMatter) {
+        if messages[message.id] == nil {
+            order.append(message.id)
+        }
         messages[message.id] = message
-        order.append(message.id)
     }
 
     public func remove(id: UUID) {

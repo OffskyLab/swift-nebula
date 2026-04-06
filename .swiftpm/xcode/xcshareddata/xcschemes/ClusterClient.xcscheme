@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "AmasServer"
-               BuildableName = "AmasServer"
-               BlueprintName = "AmasServer"
+               BlueprintIdentifier = "ClusterClient"
+               BuildableName = "ClusterClient"
+               BlueprintName = "ClusterClient"
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
@@ -68,9 +68,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "AmasServer"
-            BuildableName = "AmasServer"
-            BlueprintName = "AmasServer"
+            BlueprintIdentifier = "ClusterClient"
+            BuildableName = "ClusterClient"
+            BlueprintName = "ClusterClient"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -85,9 +85,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "AmasServer"
-            BuildableName = "AmasServer"
-            BlueprintName = "AmasServer"
+            BlueprintIdentifier = "ClusterClient"
+            BuildableName = "ClusterClient"
+            BlueprintName = "ClusterClient"
             ReferencedContainer = "container:">
          </BuildableReference>
       </BuildableProductRunnable>
