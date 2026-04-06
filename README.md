@@ -204,10 +204,10 @@ Namespace follows **forward order** — broadest first, most specific last. Read
 
 Astral node names (Galaxy, Amas, Stellar) **must not contain `.`** — the dot is reserved as the namespace separator. Names like `my.galaxy` or `ml.v2` will throw an error at init time.
 
-## Running the Demo
+## Running the Quickstart
 
 ```bash
-cd samples/demo
+cd samples/quickstart
 swift run
 ```
 

@@ -18,10 +18,10 @@ swift test --filter NebulaTests.<TestClassName>/<testMethodName>
 
 ## Demo Workflow
 
-The demo is a standalone package under `samples/demo/`:
+The demo is a standalone package under `samples/quickstart/`:
 
 ```bash
-cd samples/demo
+cd samples/quickstart
 swift run    # Starts Galaxy + Stellar + Planet client together; Ctrl+C to stop
 ```
 

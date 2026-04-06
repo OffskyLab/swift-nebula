@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "nebula-demo",
+    name: "quickstart",
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(path: "../.."),
