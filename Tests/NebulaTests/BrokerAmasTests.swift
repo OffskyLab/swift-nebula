@@ -48,6 +48,16 @@ func makeCapturingChannel() throws -> (EmbeddedChannel, MatterCapture) {
     return (channel, capture)
 }
 
+/// Creates a thread-safe NIOAsyncTestingChannel with a CapturingHandler installed.
+/// Unlike EmbeddedChannel, NIOAsyncTestingChannel uses a thread-safe event loop,
+/// so it can be used for timeout tests where eventLoop.execute is called from a Task.
+func makeAsyncCapturingChannel() -> (NIOAsyncTestingChannel, MatterCapture) {
+    let capture = MatterCapture()
+    let channel = NIOAsyncTestingChannel()
+    channel.pipeline.addHandler(CapturingHandler(capture: capture)).whenSuccess { _ in }
+    return (channel, capture)
+}
+
 // MARK: - Suite
 
 @Suite("BrokerAmas")
@@ -181,5 +191,81 @@ struct BrokerAmasTests {
         let matters2 = capture2.snapshot()
         #expect(matters2.count == 1)
         #expect(matters2[0].matterID == msg2.id)
+    }
+
+    // MARK: - ACK
+
+    @Test func acknowledge_removesFromActiveQueue() async throws {
+        let active = InMemoryQueueStorage()
+        let broker = try makeBroker(active: active)
+        let (channel, _) = try makeCapturingChannel()
+        await broker.subscribe(subscription: "g1", channel: channel)
+
+        let msg = makeMessage()
+        try await broker.enqueue(message: msg)
+        (channel.eventLoop as! EmbeddedEventLoop).run()
+
+        await broker.acknowledge(matterID: msg.id)
+
+        let messages = await active.pendingMessages()
+        #expect(messages.isEmpty)
+    }
+
+    @Test func acknowledge_unknownID_noEffect() async throws {
+        let broker = try makeBroker()
+        // Must not crash or throw for an unknown ID
+        await broker.acknowledge(matterID: UUID())
+    }
+
+    // MARK: - Timeout / Retry
+
+    @Test func ackTimeout_belowMaxRetries_retryCountIncrements() async throws {
+        let active = InMemoryQueueStorage()
+        let broker = try fastBroker(maxRetries: 2, active: active)
+        // Use a thread-safe async testing channel so that eventLoop.execute
+        // called from the timeout Task does not violate EmbeddedEventLoop's
+        // single-thread invariant.
+        let (channel, _) = makeAsyncCapturingChannel()
+        await broker.subscribe(subscription: "g1", channel: channel)
+
+        let msg = makeMessage()
+        try await broker.enqueue(message: msg)
+
+        // Wait for the first ACK timeout to fire (~50ms) and handleTimeout to complete.
+        // Check at 75ms — after first retry but before the second timeout fires at ~100ms.
+        try await Task.sleep(for: .milliseconds(75))
+
+        // handleTimeout should have incremented retryCount and re-appended to active.
+        let messages = await active.pendingMessages()
+        #expect(messages.count == 1)
+        #expect(messages[0].retryCount == 1)
+
+        // Acknowledge to cancel the pending second timeout and prevent a second retry/park.
+        await broker.acknowledge(matterID: msg.id)
+
+        // Drain any pending tasks on the async testing event loop to avoid deinit crash.
+        await (channel.eventLoop as! NIOAsyncTestingEventLoop).run()
+    }
+
+    @Test func ackTimeout_maxRetriesExhausted_messageParked() async throws {
+        let active = InMemoryQueueStorage()
+        let parked = InMemoryQueueStorage()
+        let broker = try fastBroker(maxRetries: 1, active: active, parked: parked)
+        let (channel, _) = try makeCapturingChannel()
+        await broker.subscribe(subscription: "g1", channel: channel)
+
+        let msg = makeMessage()
+        try await broker.enqueue(message: msg)
+        (channel.eventLoop as! EmbeddedEventLoop).run()
+
+        // Wait for ACK timeout to fire and park the message
+        try await Task.sleep(for: .milliseconds(150))
+
+        let activeMessages = await active.pendingMessages()
+        #expect(activeMessages.isEmpty)
+
+        let parkedMessages = await parked.pendingMessages()
+        #expect(parkedMessages.count == 1)
+        #expect(parkedMessages[0].id == msg.id)
     }
 }
