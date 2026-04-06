@@ -167,12 +167,12 @@ public actor NebulaTLSContext: TLSContext {
 
     /// Returns a server-side TLS handler using the current sslContext snapshot.
     /// Must be called from within actor isolation (i.e. from the actor itself or via await).
-    public func makeServerHandler() throws -> any ChannelHandler {
+    public func makeServerHandler() async throws -> any ChannelHandler {
         try NIOSSLServerHandler(context: sslContext)
     }
 
     /// Returns a client-side TLS handler using the current sslContext snapshot.
-    public func makeClientHandler(serverHostname: String?) throws -> any ChannelHandler {
+    public func makeClientHandler(serverHostname: String?) async throws -> any ChannelHandler {
         try NIOSSLClientHandler(context: sslContext, serverHostname: serverHostname)
     }
 
