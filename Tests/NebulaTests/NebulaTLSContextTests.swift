@@ -232,13 +232,15 @@ struct MTLSIntegrationTests {
         defer { server.closeNow() }
 
         // The TLS handshake will fail because the rogue cert is not signed by the server's CA.
+        // Issue.record fires if no error is thrown (meaning the rogue cert was wrongly accepted).
+        // Any caught error means the rogue cert was correctly rejected — that is the passing path.
         do {
             let client = try await NMTClient.connect(to: server.address, tls: rogueTLS)
             let matter = Matter(type: .call, body: Data())
             _ = try await client.request(matter: matter)
             Issue.record("Expected TLS handshake failure — connection should have been rejected")
         } catch {
-            // Expected: NIOSSLError or channel-closed error
+            // Rogue cert rejected as expected (NIOSSLError or connectionClosed from server close).
         }
     }
 
