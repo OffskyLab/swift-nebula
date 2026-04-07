@@ -136,27 +136,29 @@ struct TLSForwardingTests {
     }
 
     /// Verify that passing a non-nil NebulaTLSContext to GalaxyClient.connect
-    /// actually activates TLS on the connection (the TLS handshake is attempted).
-    /// We detect this by connecting a TLS client to a plain server — if TLS
-    /// is active, the connection fails with a TLS error, not a protocol error.
+    /// actually activates TLS on the connection.
+    /// A successful roundtrip with a TLS server proves the tls parameter is
+    /// forwarded to the underlying NMTClient (a plain client cannot handshake
+    /// with a TLS server).
     @Test func galaxyClient_withTLS_activatesTLSOnConnect() async throws {
-        // Plain NMT server (no TLS) — any TLS client connecting here will
-        // fail with an SSL error, not an NMT framing error.
-        let plainServer = try await NMTServer.bind(
-            on: try SocketAddress.makeAddressResolvingHost("127.0.0.1", port: 0),
-            handler: EchoMatter()
-        )
-        defer { plainServer.closeNow() }
-
+        let serverTLS = try NebulaTLSContext(configuration: serverConfig())
         let clientTLS = try NebulaTLSContext(configuration: clientConfig())
-        // The connection attempt installs the TLS handler. The TLS handshake
-        // will fail because the server doesn't speak TLS — that's expected.
-        // What we're verifying is that the tls param is forwarded and the
-        // TLS handler is injected (otherwise this would fail differently).
-        let client = try? await GalaxyClient.connect(to: plainServer.address, tls: clientTLS)
-        // Whether connect fails or succeeds, no assertion is needed here beyond
-        // confirming the API accepts a non-nil TLS context without crashing.
-        try? await client?.close()
+
+        let server = try await NMTServer.bind(
+            on: try SocketAddress.makeAddressResolvingHost("127.0.0.1", port: 0),
+            handler: EchoMatter(),
+            tls: serverTLS
+        )
+        defer { server.closeNow() }
+
+        // GalaxyClient.connect must forward tls — confirmed by a successful
+        // roundtrip with the TLS server.
+        let client = try await GalaxyClient.connect(to: server.address, tls: clientTLS)
+        defer { Task { try? await client.close() } }
+
+        let matter = try Matter.make(type: .clone, body: CloneBody())
+        let reply = try await client.request(matter: matter)
+        #expect(reply.matterID == matter.matterID)
     }
 }
 
