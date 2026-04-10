@@ -34,7 +34,7 @@ struct TypedClientTimeoutTests {
             on: .makeAddressResolvingHost("127.0.0.1", port: 0),
             handler: NeverReplyHandler()
         )
-        defer { Task { await server.shutdown() } }
+        defer { Task { await server.shutdown(gracePeriod: .milliseconds(500)) } }
 
         let client = try await GalaxyClient.connect(
             to: server.address,
@@ -57,7 +57,7 @@ struct TypedClientTimeoutTests {
             on: .makeAddressResolvingHost("127.0.0.1", port: 0),
             handler: NeverReplyHandler()
         )
-        defer { Task { await server.shutdown() } }
+        defer { Task { await server.shutdown(gracePeriod: .milliseconds(500)) } }
 
         // Long defaultTimeout — method-level override must win.
         let client = try await GalaxyClient.connect(
