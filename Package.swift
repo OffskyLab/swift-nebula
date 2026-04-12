@@ -14,10 +14,11 @@ let package = Package(
             targets: ["Nebula"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/OffskyLab/swift-nmtp.git", from: "0.0.4"),
+        .package(url: "https://github.com/OffskyLab/swift-nmtp.git", branch: "feature/matter-type-rename"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.40.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.26.0"),
+        .package(url: "https://github.com/hirotakan/MessagePacker.git", from: "0.4.7"),
     ],
     targets: [
         .target(
@@ -27,6 +28,7 @@ let package = Package(
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "MessagePacker", package: "MessagePacker"),
             ]),
         .testTarget(
             name: "NebulaTests",

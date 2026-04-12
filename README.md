@@ -206,12 +206,10 @@ Astral node names (Galaxy, Cluster, Stellar) **must not contain `.`** — the do
 
 ## Running the Quickstart
 
-```bash
-cd samples/quickstart
-swift run
-```
-
-All servers (Ingress, Galaxy, Stellar) and the client task start together and shut down gracefully on Ctrl+C.
+Sample code lives in its own repository: see
+[OffskyLab/swift-nebula-samples](https://github.com/OffskyLab/swift-nebula-samples)
+(runs Ingress, Galaxy, Stellar, and a client task together with graceful
+shutdown on Ctrl+C).
 
 ## Dependencies
 

@@ -149,22 +149,22 @@ struct TLSForwardingTests {
             handler: EchoMatter(),
             tls: serverTLS
         )
-        defer { server.closeNow() }
+        defer { Task { try? await server.shutdown() } }
 
         // GalaxyClient.connect must forward tls — confirmed by a successful
         // roundtrip with the TLS server.
         let client = try await GalaxyClient.connect(to: server.address, tls: clientTLS)
         defer { Task { try? await client.close() } }
 
-        let matter = try Matter.make(type: .clone, body: CloneBody())
+        let matter = try Matter.make(CloneMatter())
         let reply = try await client.request(matter: matter)
         #expect(reply.matterID == matter.matterID)
     }
 }
 
-private struct EchoMatter: NMTServerTarget {
+private struct EchoMatter: NMTHandler {
     func handle(matter: Matter, channel: Channel) async throws -> Matter? {
-        Matter(type: .reply, matterID: matter.matterID, body: matter.body)
+        matter.makeReply()
     }
 }
 
@@ -209,12 +209,12 @@ struct MTLSIntegrationTests {
             handler: EchoMatter(),
             tls: serverTLS
         )
-        defer { server.closeNow() }
+        defer { Task { try? await server.shutdown() } }
 
         let client = try await NMTClient.connect(to: server.address, tls: clientTLS)
         defer { Task { try? await client.close() } }
 
-        let matter = Matter(type: .call, body: Data("hello-mtls".utf8))
+        let matter = Matter.make(type: .command, body: Data("hello-mtls".utf8))
         let reply = try await client.request(matter: matter)
         #expect(reply.matterID == matter.matterID)
         #expect(reply.type == .reply)
@@ -229,14 +229,14 @@ struct MTLSIntegrationTests {
             handler: EchoMatter(),
             tls: serverTLS
         )
-        defer { server.closeNow() }
+        defer { Task { try? await server.shutdown() } }
 
         // The TLS handshake will fail because the rogue cert is not signed by the server's CA.
         // Issue.record fires if no error is thrown (meaning the rogue cert was wrongly accepted).
         // Any caught error means the rogue cert was correctly rejected — that is the passing path.
         do {
             let client = try await NMTClient.connect(to: server.address, tls: rogueTLS)
-            let matter = Matter(type: .call, body: Data())
+            let matter = Matter.make(type: .command, body: Data())
             _ = try await client.request(matter: matter)
             Issue.record("Expected TLS handshake failure — connection should have been rejected")
         } catch {
@@ -253,13 +253,13 @@ struct MTLSIntegrationTests {
             handler: EchoMatter(),
             tls: serverTLS
         )
-        defer { server.closeNow() }
+        defer { Task { try? await server.shutdown() } }
 
         let client = try await NMTClient.connect(to: server.address, tls: clientTLS)
         defer { Task { try? await client.close() } }
 
         // Confirm the connection works before reload.
-        let before = Matter(type: .call, body: Data("before-reload".utf8))
+        let before = Matter.make(type: .command, body: Data("before-reload".utf8))
         let reply1 = try await client.request(matter: before)
         #expect(reply1.type == .reply)
 
@@ -267,7 +267,7 @@ struct MTLSIntegrationTests {
         try serverTLS.reload(configuration: serverConfig())
 
         // Existing connection must still be usable after reload.
-        let after = Matter(type: .call, body: Data("after-reload".utf8))
+        let after = Matter.make(type: .command, body: Data("after-reload".utf8))
         let reply2 = try await client.request(matter: after)
         #expect(reply2.type == .reply)
     }
