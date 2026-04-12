@@ -19,14 +19,14 @@ public final class Nebula: Sendable {
 
 extension Nebula {
 
-    /// Bind an NMT server with the given handler on the specified address.
+    /// Bind an NMT server using a dispatcher as the handler.
     /// Pass a `NebulaTLSContext` to enable mTLS on all incoming connections.
     public static func bind(
-        _ handler: some NMTServerTarget,
+        _ dispatcher: NMTDispatcher,
         on address: SocketAddress,
         tls: NebulaTLSContext? = nil,
         eventLoopGroup: MultiThreadedEventLoopGroup? = nil
     ) async throws -> NMTServer {
-        try await NMTServer.bind(on: address, handler: handler, tls: tls, eventLoopGroup: eventLoopGroup)
+        try await NMTServer.bind(on: address, handler: dispatcher, tls: tls, eventLoopGroup: eventLoopGroup)
     }
 }
