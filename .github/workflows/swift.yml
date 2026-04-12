@@ -44,18 +44,6 @@ jobs:
       - name: Test
         run: swift test -v --disable-xctest --enable-swift-testing
 
-  # Build + test the standalone demo package
-  build-demo:
-    name: Demo package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: SwiftyLab/setup-swift@v1
-        with:
-          swift-version: "6.2"
-      - name: Build quickstart
-        run: swift build --package-path samples/quickstart
-
   # Offline build on additional Linux distributions.
   # Uses `docker run` instead of the `container:` directive so that
   # actions/checkout@v4 (Node.js 20, requires GLIBC_2.27) runs on the Ubuntu
