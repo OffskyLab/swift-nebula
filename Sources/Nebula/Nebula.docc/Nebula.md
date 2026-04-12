@@ -1,5 +1,9 @@
 # Nebula
 
+@Metadata {
+    @TechnologyRoot
+}
+
 Nebula is a distributed service mesh built on the NMTP wire protocol.
 
 ## Topics
