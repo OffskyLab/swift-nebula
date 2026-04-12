@@ -49,7 +49,7 @@ public struct IngressClient: Sendable {
         return IngressClient(base: base, defaultTimeout: defaultTimeout)
     }
 
-    public var pushes: AsyncStream<Matter> { base.pushes }
+    public var pushes: MatterStream { base.pushes }
     public func close() async throws { try await base.close() }
 
     public func find(namespace: String, timeout: Duration? = nil) async throws -> FindResult {
@@ -150,7 +150,7 @@ public struct GalaxyClient: Sendable {
         return GalaxyClient(base: base, defaultTimeout: defaultTimeout)
     }
 
-    public var pushes: AsyncStream<Matter> { base.pushes }
+    public var pushes: MatterStream { base.pushes }
     public func close() async throws { try await base.close() }
 
     public func request(matter: Matter, timeout: Duration? = nil) async throws -> Matter {
