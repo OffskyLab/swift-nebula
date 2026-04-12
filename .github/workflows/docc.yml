@@ -31,6 +31,21 @@ jobs:
             --transform-for-static-hosting \
             --hosting-base-path swift-nebula
 
+      - name: Add root redirect
+        run: |
+          cat > ./docs-output/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=documentation/nebula/">
+            <link rel="canonical" href="documentation/nebula/">
+          </head>
+          <body>
+            <p>Redirecting to <a href="documentation/nebula/">Nebula documentation</a>...</p>
+          </body>
+          </html>
+          EOF
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
