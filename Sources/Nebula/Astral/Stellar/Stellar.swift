@@ -48,7 +48,7 @@ public actor ServiceStellar: Stellar {
 extension ServiceStellar {
 
     public func register(on dispatcher: NMTDispatcher) {
-        buildChain(dispatcher: dispatcher)
+        buildChain()
 
         dispatcher.register(CallMatter.self) { [unowned self] _, _ in
             // The dispatcher will not actually call this — we intercept earlier via NMTHandler.
@@ -63,7 +63,7 @@ extension ServiceStellar {
         }
     }
 
-    private func buildChain(dispatcher: NMTDispatcher) {
+    private func buildChain() {
         chain = nil
         for middleware in pendingMiddlewares {
             let inner: NMTMiddlewareNext = chain ?? { [unowned self] matter in
@@ -80,6 +80,9 @@ extension ServiceStellar {
 extension ServiceStellar: NMTHandler {
 
     public func handle(matter: Matter, channel: Channel) async throws -> Matter? {
+        if chain == nil && !pendingMiddlewares.isEmpty {
+            buildChain()
+        }
         if let chain {
             return try await chain(matter)
         }

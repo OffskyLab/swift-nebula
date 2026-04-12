@@ -1,18 +1,19 @@
+// Tests/NebulaTests/NebulaTests.swift
+
 import Testing
 import Foundation
 import NIO
 import NMTP
+import MessagePacker
 @testable import Nebula
 
 // MARK: - Test Support
 
-/// Collects labelled call events so middleware order can be asserted.
 actor CallLog {
     var entries: [String] = []
     func record(_ s: String) { entries.append(s) }
 }
 
-/// Middleware that records when it runs (before and after calling next).
 struct TrackingMiddleware: NMTMiddleware {
     let label: String
     let log: CallLog
@@ -25,19 +26,24 @@ struct TrackingMiddleware: NMTMiddleware {
     }
 }
 
-/// Middleware that never calls next — simulates an auth gate that blocks the request.
 struct ShortCircuitMiddleware: NMTMiddleware {
-    func handle(_ matter: Matter, next: NMTMiddlewareNext) async throws -> Matter? {
-        return nil
-    }
+    func handle(_ matter: Matter, next: NMTMiddlewareNext) async throws -> Matter? { nil }
 }
 
 private func loopbackPort0() throws -> SocketAddress {
     try .makeAddressResolvingHost("127.0.0.1", port: 0)
 }
 
-private func dummyChannel() -> Channel {
-    EmbeddedChannel()
+private func echoStellar() async throws -> ServiceStellar {
+    let stellar = try ServiceStellar(name: "echo", namespace: "test.echo")
+    let svc = Service(name: "echo")
+    await svc.add(method: "ping") { _ in Data([1]) }
+    await stellar.add(service: svc)
+    return stellar
+}
+
+private func makeCallMatter() throws -> Matter {
+    try Matter.make(CallMatter(namespace: "test.echo", service: "echo", method: "ping", arguments: []))
 }
 
 // MARK: - Suite 1: Middleware Chain (unit — no network)
@@ -45,58 +51,40 @@ private func dummyChannel() -> Channel {
 @Suite("NMTMiddleware Chain")
 struct NMTMiddlewareChainTests {
 
-    private func echoStellar() async throws -> ServiceStellar {
-        let stellar = try ServiceStellar(name: "echo", namespace: "test.echo")
-        let svc = Service(name: "echo")
-        await svc.add(method: "ping") { _ in Data([1]) }
-        await stellar.add(service: svc)
-        return stellar
-    }
-
-    private func callMatter() throws -> Matter {
-        let body = CallBody(namespace: "test.echo", service: "echo", method: "ping", arguments: [])
-        return try Matter.make(type: .call, body: body)
-    }
-
-    /// With no middleware, a call matter is dispatched directly to coreDispatch.
     @Test func noMiddleware_callReachesCore() async throws {
         let stellar = try await echoStellar()
-        let reply = try await stellar.handle(matter: try callMatter(), channel: dummyChannel())
-        let body = try #require(reply).decodeBody(CallReplyBody.self)
+        let reply = try await stellar.handle(matter: try makeCallMatter(), channel: EmbeddedChannel())
+        let body = try #require(reply).decode(CallReplyMatter.self)
         #expect(body.error == nil)
         #expect(body.result != nil)
     }
 
-    /// The last `use()` call becomes the outermost layer: B wraps A wraps core.
-    /// Expected log: B:in → A:in → (core) → A:out → B:out
     @Test func lastRegistered_runsOutermost() async throws {
         let log = CallLog()
         let stellar = try await echoStellar()
         await stellar.use(TrackingMiddleware(label: "A", log: log))
         await stellar.use(TrackingMiddleware(label: "B", log: log))
-        _ = try await stellar.handle(matter: try callMatter(), channel: dummyChannel())
+        _ = try await stellar.handle(matter: try makeCallMatter(), channel: EmbeddedChannel())
         let entries = await log.entries
         #expect(entries == ["B:in", "A:in", "A:out", "B:out"])
     }
 
-    /// A middleware that does not call `next` prevents all inner layers from running.
     @Test func shortCircuit_preventsInnerMiddleware() async throws {
         let log = CallLog()
         let stellar = try await echoStellar()
         await stellar.use(TrackingMiddleware(label: "A", log: log))
         await stellar.use(ShortCircuitMiddleware())
-        _ = try await stellar.handle(matter: try callMatter(), channel: dummyChannel())
+        _ = try await stellar.handle(matter: try makeCallMatter(), channel: EmbeddedChannel())
         #expect(await log.entries.isEmpty)
     }
 
-    /// Non-call matters (clone) pass through the middleware chain and are handled by coreDispatch.
     @Test func nonCallMatter_cloneHandledByCore() async throws {
         let log = CallLog()
         let stellar = try await echoStellar()
         await stellar.use(TrackingMiddleware(label: "A", log: log))
-        let cloneMatter = try Matter.make(type: .clone, body: CloneBody())
-        let reply = try await stellar.handle(matter: cloneMatter, channel: dummyChannel())
-        let body = try #require(reply).decodeBody(CloneReplyBody.self)
+        let cloneMatter = try Matter.make(CloneMatter())
+        let reply = try await stellar.handle(matter: cloneMatter, channel: EmbeddedChannel())
+        let body = try #require(reply).decode(CloneReplyMatter.self)
         #expect(body.name == "echo")
         #expect(await log.entries == ["A:in", "A:out"])
     }
@@ -112,13 +100,16 @@ struct IngressRoutingTests {
         let svc = Service(name: "echo")
         await svc.add(method: "ping") { _ in Data([1]) }
         await stellar.add(service: svc)
-        return try await NMTServer.bind(on: try loopbackPort0(), handler: stellar)
+        let dispatcher = NMTDispatcher()
+        await stellar.register(on: dispatcher)
+        return try await NMTServer.bind(on: try loopbackPort0(), handler: dispatcher)
     }
 
-    /// Planet-side `find` via Ingress → Galaxy → Cluster returns a Stellar address.
     @Test func find_returnsStellarAddress() async throws {
         let galaxy = try StandardGalaxy(name: "test")
-        let galaxyServer = try await NMTServer.bind(on: try loopbackPort0(), handler: galaxy)
+        let galaxyDispatcher = NMTDispatcher()
+        await galaxy.register(on: galaxyDispatcher)
+        let galaxyServer = try await NMTServer.bind(on: try loopbackPort0(), handler: galaxyDispatcher)
         defer { Task { try? await galaxyServer.stop() } }
 
         let stellarServer = try await bindEchoStellar(namespace: "test.echo")
@@ -127,7 +118,9 @@ struct IngressRoutingTests {
         try await galaxy.register(namespace: "test.echo", stellarEndpoint: stellarServer.address)
 
         let ingress = StandardIngress(name: "ingress")
-        let ingressServer = try await NMTServer.bind(on: try loopbackPort0(), handler: ingress)
+        let ingressDispatcher = NMTDispatcher()
+        await ingress.register(on: ingressDispatcher)
+        let ingressServer = try await NMTServer.bind(on: try loopbackPort0(), handler: ingressDispatcher)
         defer { Task { try? await ingressServer.stop() } }
 
         let ingressClient = try await IngressClient.connect(to: ingressServer.address)
@@ -141,10 +134,11 @@ struct IngressRoutingTests {
         #expect(result.stellarAddress != nil)
     }
 
-    /// `unregister` via Ingress → Galaxy → Cluster removes the dead Stellar and returns the next one.
     @Test func unregister_removesDeadStellarAndReturnsNext() async throws {
         let galaxy = try StandardGalaxy(name: "test")
-        let galaxyServer = try await NMTServer.bind(on: try loopbackPort0(), handler: galaxy)
+        let galaxyDispatcher = NMTDispatcher()
+        await galaxy.register(on: galaxyDispatcher)
+        let galaxyServer = try await NMTServer.bind(on: try loopbackPort0(), handler: galaxyDispatcher)
         defer { Task { try? await galaxyServer.stop() } }
 
         let stellar1Server = try await bindEchoStellar(namespace: "test.echo")
@@ -156,7 +150,9 @@ struct IngressRoutingTests {
         try await galaxy.register(namespace: "test.echo", stellarEndpoint: stellar2Server.address)
 
         let ingress = StandardIngress(name: "ingress")
-        let ingressServer = try await NMTServer.bind(on: try loopbackPort0(), handler: ingress)
+        let ingressDispatcher = NMTDispatcher()
+        await ingress.register(on: ingressDispatcher)
+        let ingressServer = try await NMTServer.bind(on: try loopbackPort0(), handler: ingressDispatcher)
         defer { Task { try? await ingressServer.stop() } }
 
         let ingressClient = try await IngressClient.connect(to: ingressServer.address)
@@ -174,7 +170,6 @@ struct IngressRoutingTests {
             host: firstAddr.ipAddress ?? "127.0.0.1",
             port: firstAddr.port ?? 0
         )
-
         let nextAddr = try #require(next.nextAddress)
         #expect(nextAddr != firstAddr)
     }
@@ -185,15 +180,9 @@ struct IngressRoutingTests {
 @Suite("Service Actor")
 struct ServiceActorTests {
 
-    /// Concurrent handle() calls on the same ServiceStellar must all succeed.
     @Test func concurrentHandleCalls() async throws {
-        let stellar = try ServiceStellar(name: "echo", namespace: "test.echo")
-        let svc = Service(name: "echo")
-        await svc.add(method: "ping") { _ in Data([1]) }
-        await stellar.add(service: svc)
-
-        let body = CallBody(namespace: "test.echo", service: "echo", method: "ping", arguments: [])
-        let matter = try Matter.make(type: .call, body: body)
+        let stellar = try await echoStellar()
+        let matter = try makeCallMatter()
 
         try await withThrowingTaskGroup(of: Matter?.self) { group in
             for _ in 0..<20 {
@@ -202,19 +191,18 @@ struct ServiceActorTests {
                 }
             }
             for try await reply in group {
-                let replyBody = try #require(reply).decodeBody(CallReplyBody.self)
-                #expect(replyBody.error == nil)
+                let body = try #require(reply).decode(CallReplyMatter.self)
+                #expect(body.error == nil)
             }
         }
     }
 
-    /// Concurrent add + perform must not crash and must return correct results.
     @Test func concurrentAddAndPerform() async throws {
         let svc = Service(name: "math")
         await svc.add(method: "double") { args in
             guard let first = args.first else { return nil }
             let n = try first.unwrap(as: Int.self)
-            return try JSONEncoder().encode(n * 2)
+            return try MessagePackEncoder().encode(n * 2)
         }
 
         try await withThrowingTaskGroup(of: Data?.self) { group in
@@ -225,7 +213,7 @@ struct ServiceActorTests {
                 }
             }
             for try await result in group {
-                let value = try JSONDecoder().decode(Int.self, from: result!)
+                let value = try MessagePackDecoder().decode(Int.self, from: result!)
                 #expect(value == 2)
             }
         }

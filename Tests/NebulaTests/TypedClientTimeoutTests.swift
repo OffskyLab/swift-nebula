@@ -5,7 +5,7 @@ import NMTP
 @testable import Nebula
 
 /// Simulates a hung server: accepts the connection but never sends a reply.
-private struct NeverReplyHandler: NMTServerTarget {
+private struct NeverReplyHandler: NMTHandler {
     func handle(matter: Matter, channel: any Channel) async throws -> Matter? {
         try await Task.sleep(for: .seconds(60))
         return nil

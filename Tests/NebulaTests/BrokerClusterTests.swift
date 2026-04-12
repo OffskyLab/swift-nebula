@@ -130,7 +130,7 @@ struct BrokerClusterTests {
 
         let matters = capture.snapshot()
         let matter = try #require(matters.first)
-        #expect(matter.type == .enqueue)
+        #expect(matter.type == .command)
         #expect(matter.matterID == msg.id)
     }
 
@@ -150,12 +150,12 @@ struct BrokerClusterTests {
 
         let matters1 = capture1.snapshot()
         let matter1 = try #require(matters1.first)
-        #expect(matter1.type == .enqueue)
+        #expect(matter1.type == .command)
         #expect(matter1.matterID == msg.id)
 
         let matters2 = capture2.snapshot()
         let matter2 = try #require(matters2.first)
-        #expect(matter2.type == .enqueue)
+        #expect(matter2.type == .command)
         #expect(matter2.matterID == msg.id)
     }
 

@@ -9,7 +9,7 @@ import MessagePacker
 // A minimal conforming type for testing the protocol contract.
 private struct TestMatter: MatterBehavior {
     static let typeID: UInt16 = 0xFFFE
-    static let type: NMTP.MatterBehavior = .query
+    static let type: MatterType = .query
     let value: String
 }
 
@@ -19,7 +19,7 @@ struct MatterBehaviorProtocolTests {
     @Test("Conforming type exposes typeID and type")
     func conformingTypeExposesMetadata() {
         #expect(TestMatter.typeID == 0xFFFE)
-        #expect(TestMatter.type == NMTP.MatterBehavior.query)
+        #expect(TestMatter.type == MatterType.query)
     }
 
     @Test("Conforming type is Codable")
